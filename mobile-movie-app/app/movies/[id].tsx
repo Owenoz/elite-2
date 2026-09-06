@@ -21,16 +21,12 @@ import {
     fetchSimilarMovies,
     fetchMovieVideos,
 } from "@/services/api";
-import { useAuth } from "@/context/AuthContext";
 import {
-    addToFavorites,
-    removeFromFavorites,
-    isMovieFavorited,
     addToDownloads,
-    isMovieDownloaded,
 } from "@/services/appwrite";
 import CastCard from "@/components/CastCard";
 import MovieCard from "@/components/MovieCard";
+import PaymentModal from "@/components/PaymentModal";
 
 // Defines the props for the reusable MovieInfo component.
 interface MovieInfoProps {
@@ -50,12 +46,12 @@ const MovieInfo = ({ label, value }: MovieInfoProps) => (
 
 const Details = () => {
     const router = useRouter();
-    const { user } = useAuth();
     const { id } = useLocalSearchParams();
     const [isFavorite, setIsFavorite] = useState(false);
     const [isDownloaded, setIsDownloaded] = useState(false);
     const [favoriteLoading, setFavoriteLoading] = useState(false);
     const [downloadLoading, setDownloadLoading] = useState(false);
+    const [paymentVisible, setPaymentVisible] = useState(false);
 
     // Fetch movie details, credits, similar movies, and videos
     const { data: movie, loading: movieLoading } = useFetch(() =>
@@ -71,101 +67,60 @@ const Details = () => {
         fetchMovieVideos(id as string)
     );
 
-    // Check if movie is favorited and downloaded
+    // Check favorite/download status in local state only (no auth required)
     useEffect(() => {
-        const checkStatuses = async () => {
-            if (user && movie) {
-                const favorited = await isMovieFavorited(user.$id, movie.id);
-                setIsFavorite(favorited);
-                
-                const downloaded = await isMovieDownloaded(user.$id, movie.id);
-                setIsDownloaded(downloaded);
-            }
-        };
-        checkStatuses();
-    }, [user, movie]);
+        // Reset states when movie changes
+        setIsFavorite(false);
+        setIsDownloaded(false);
+    }, [id]);
 
     const handleFavoriteToggle = async () => {
-        if (!user) {
-            Alert.alert("Login Required", "Please login to save favorites");
-            return;
-        }
-
         if (!movie) return;
-
         setFavoriteLoading(true);
         try {
-            if (isFavorite) {
-                await removeFromFavorites(user.$id, movie.id);
-                setIsFavorite(false);
-                Alert.alert("Success", "Removed from favorites");
-            } else {
-                await addToFavorites(user.$id, {
-                    id: movie.id,
-                    title: movie.title,
-                    poster_path: movie.poster_path,
-                    release_date: movie.release_date,
-                    vote_average: movie.vote_average,
-                } as Movie);
-                setIsFavorite(true);
-                Alert.alert("Success", "Added to favorites");
-            }
-        } catch (error) {
-            Alert.alert("Error", "Failed to update favorites");
+            setIsFavorite((prev) => !prev);
         } finally {
             setFavoriteLoading(false);
         }
     };
 
-    const handleDownload = async () => {
-        if (!user) {
-            Alert.alert("Login Required", "Please login to download movies");
-            return;
-        }
-
+    // Opens the payment modal — actual download happens after payment success
+    const handleDownload = () => {
         if (!movie) return;
-
         if (isDownloaded) {
             Alert.alert("Already Downloaded", "This movie is already in your downloads");
             return;
         }
+        setPaymentVisible(true);
+    };
 
-        Alert.alert(
-            "Download Movie",
-            "This feature simulates downloading. In a real app, you would need proper licensing and download infrastructure.",
-            [
-                { text: "Cancel", style: "cancel" },
+    // Called by PaymentModal after successful email verification
+    const handlePaymentSuccess = async (email: string) => {
+        setPaymentVisible(false);
+        if (!movie) return;
+        setDownloadLoading(true);
+        try {
+            // Simulate processing download
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            await addToDownloads(
+                email, // use email as userId since auth is removed
                 {
-                    text: "Download",
-                    onPress: async () => {
-                        setDownloadLoading(true);
-                        try {
-                            // Simulate download process
-                            await new Promise((resolve) => setTimeout(resolve, 2000));
-                            
-                            await addToDownloads(
-                                user.$id,
-                                {
-                                    id: movie.id,
-                                    title: movie.title,
-                                    poster_path: movie.poster_path,
-                                    release_date: movie.release_date,
-                                    vote_average: movie.vote_average,
-                                } as Movie,
-                                "downloaded://movie/" + movie.id
-                            );
-                            
-                            setIsDownloaded(true);
-                            Alert.alert("Success", "Movie downloaded successfully!");
-                        } catch (error) {
-                            Alert.alert("Error", "Failed to download movie");
-                        } finally {
-                            setDownloadLoading(false);
-                        }
-                    },
-                },
-            ]
-        );
+                    id: movie.id,
+                    title: movie.title,
+                    poster_path: movie.poster_path,
+                    release_date: movie.release_date,
+                    vote_average: movie.vote_average,
+                } as Movie,
+                "downloaded://movie/" + movie.id
+            );
+            setIsDownloaded(true);
+        } catch (error) {
+            // Download record optional — don't block the user
+            console.error("Download record error:", error);
+            setIsDownloaded(true);
+        } finally {
+            setDownloadLoading(false);
+        }
     };
 
     const handlePlayTrailer = async () => {
@@ -425,6 +380,14 @@ const Details = () => {
                     <Text className="text-white font-semibold text-base">Go Back</Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Payment Modal — shown when user taps Download */}
+            <PaymentModal
+                visible={paymentVisible}
+                movieTitle={movie?.title || ""}
+                onClose={() => setPaymentVisible(false)}
+                onPaymentSuccess={handlePaymentSuccess}
+            />
         </View>
     );
 };
