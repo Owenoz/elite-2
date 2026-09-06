@@ -3,12 +3,12 @@ export const TMDB_CONFIG = {
     // The base URL for all TMDB API v3 requests
     BASE_URL: "https://api.themoviedb.org/3",
     // The API key retrieved from environment variables for authentication
-    API_KEY: process.env.EXPO_PUBLIC_MOVIE_API_KEY,
+    API_KEY: process.env.EXPO_PUBLIC_MOVIE_API_KEY || "",
     // Standard headers required for all API requests
     headers: {
         accept: "application/json",
         // The Authorization header includes the API key as a Bearer token
-        Authorization: `Bearer ${process.env.EXPO_PUBLIC_MOVIE_API_KEY}`,
+        Authorization: `Bearer ${process.env.EXPO_PUBLIC_MOVIE_API_KEY || ""}`,
     },
 };
 

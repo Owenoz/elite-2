@@ -5,6 +5,7 @@ import {
     ScrollView,
     TouchableOpacity,
     Alert,
+    Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -73,14 +74,23 @@ const Register = () => {
         setLoading(true);
         try {
             await registerUser(form.email, form.password, form.name);
-            Alert.alert("Success", "Account created successfully!", [
-                { text: "OK", onPress: () => router.replace("/(tabs)") },
-            ]);
+
+            if (Platform.OS === "web") {
+                router.replace("/(tabs)");
+            } else {
+                Alert.alert("Success", "Account created successfully!", [
+                    { text: "OK", onPress: () => router.replace("/(tabs)") },
+                ]);
+            }
         } catch (error: any) {
-            Alert.alert(
-                "Registration Failed",
-                error.message || "Failed to create account"
-            );
+            if (Platform.OS === "web") {
+                alert(error.message || "Failed to create account");
+            } else {
+                Alert.alert(
+                    "Registration Failed",
+                    error.message || "Failed to create account"
+                );
+            }
         } finally {
             setLoading(false);
         }

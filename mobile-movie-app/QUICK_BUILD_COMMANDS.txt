@@ -1,0 +1,77 @@
+==========================================
+   MOVIEHUB APK BUILD - QUICK COMMANDS
+==========================================
+
+📋 STEPS TO BUILD APK:
+
+1. Install EAS CLI (Run once):
+   npm install -g eas-cli
+
+2. Login to Expo:
+   eas login
+
+3. Configure Project (Run once):
+   eas build:configure
+
+4. Build APK:
+   eas build -p android --profile preview
+
+5. Download APK:
+   Visit: https://expo.dev
+   Go to your builds and download
+
+==========================================
+
+⚡ QUICK BUILD (After setup):
+   eas build -p android --profile preview
+
+==========================================
+
+📱 BUILD TYPES:
+
+Preview (Testing):
+   eas build -p android --profile preview
+   - Creates APK file
+   - Faster build
+   - For testing
+
+Production (Release):
+   eas build -p android --profile production
+   - Optimized APK
+   - For distribution
+
+==========================================
+
+🔍 CHECK BUILD STATUS:
+   eas build:list
+
+==========================================
+
+❓ TROUBLESHOOTING:
+
+Not logged in?
+   → Run: eas login
+
+Project not found?
+   → Run: eas build:configure
+
+Build failed?
+   → Check logs at expo.dev
+   → Verify .env file exists
+   → Run: npm install
+
+==========================================
+
+📂 BUILD OUTPUT:
+   - APK file will be available at expo.dev
+   - Check email for build completion
+   - Download link valid for 30 days
+
+==========================================
+
+🎯 YOUR APP DETAILS:
+   Name: MovieHub
+   Package: com.moviehub.app
+   Version: 1.0.0
+
+==========================================
