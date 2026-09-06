@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'mobile-movie-app/**'
-  workflow_dispatch: # allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   build:
@@ -30,11 +30,10 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
 
       - name: Build APK (preview)
         run: eas build -p android --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
