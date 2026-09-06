@@ -71,13 +71,8 @@ const TabsLayout = () => {
                 options={{
                     title: 'Home',
                     headerShown: false,
-                    // Use the custom TabIcon component for the tab bar icon
                     tabBarIcon: ({focused}) => (
-                        <TabIcon
-                            focused={focused}
-                            icon={icons.home}
-                            title="Home"
-                        />
+                        <TabIcon focused={focused} icon={icons.home} title="Home" />
                     )
                 }}
             />
@@ -87,11 +82,7 @@ const TabsLayout = () => {
                     title: 'Search',
                     headerShown: false,
                     tabBarIcon: ({focused}) => (
-                        <TabIcon
-                            focused={focused}
-                            icon={icons.search}
-                            title="Search"
-                        />
+                        <TabIcon focused={focused} icon={icons.search} title="Search" />
                     )
                 }}
             />
@@ -101,12 +92,17 @@ const TabsLayout = () => {
                     title: 'Saved',
                     headerShown: false,
                     tabBarIcon: ({focused}) => (
-                        <TabIcon
-                            focused={focused}
-                            icon={icons.save}
-                            title="Saved"
-                        />
+                        <TabIcon focused={focused} icon={icons.save} title="Saved" />
                     )
+                }}
+            />
+            {/* saved.tsx is registered but hidden from tab bar — navigated to directly from profile */}
+            <Tabs.Screen
+                name="saved"
+                options={{
+                    title: 'Saved',
+                    headerShown: false,
+                    href: null, // hide from tab bar
                 }}
             />
             <Tabs.Screen
@@ -115,11 +111,7 @@ const TabsLayout = () => {
                     title: 'Profile',
                     headerShown: false,
                     tabBarIcon: ({focused}) => (
-                        <TabIcon
-                            focused={focused}
-                            icon={icons.person}
-                            title="Profile"
-                        />
+                        <TabIcon focused={focused} icon={icons.person} title="Profile" />
                     )
                 }}
             />

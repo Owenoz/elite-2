@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "moviehub",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER"
@@ -52,7 +52,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ead96ed6-5a31-4f76-92b1-a275ea372a08"
+        "projectId": "1c7e0a14-1afc-4fc2-883f-ac371686eaa7"
       }
     }
   }

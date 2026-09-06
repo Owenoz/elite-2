@@ -1,14 +1,21 @@
+// Hardcoded fallback API key so APK always has it even if env vars are missing
+const FALLBACK_API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI0NzJkOWQyMTczM2Q3YWMzMDVkOWI2NGIwMTNmYjkwZiIsIm5iZiI6MTc1MTkwNDI1OS4yMzMsInN1YiI6IjY4NmJmMDAzZTkwOTFiMjlkYTlhNDFmNSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.3yujtwat5S53QuiMkaHfFrj6gJZSvUKPu5S_qZp_dnA";
+
+// Getter so the key is always resolved at call time, never at module load
+const getApiKey = () => process.env.EXPO_PUBLIC_MOVIE_API_KEY || FALLBACK_API_KEY;
+
 // Define and export a configuration object for the TMDB API
 export const TMDB_CONFIG = {
     // The base URL for all TMDB API v3 requests
     BASE_URL: "https://api.themoviedb.org/3",
-    // The API key retrieved from environment variables for authentication
-    API_KEY: process.env.EXPO_PUBLIC_MOVIE_API_KEY || "",
-    // Standard headers required for all API requests
-    headers: {
-        accept: "application/json",
-        // The Authorization header includes the API key as a Bearer token
-        Authorization: `Bearer ${process.env.EXPO_PUBLIC_MOVIE_API_KEY || ""}`,
+    // Use getter so key is resolved at runtime
+    get API_KEY() { return getApiKey(); },
+    // Standard headers required for all API requests — resolved at call time
+    get headers() {
+        return {
+            accept: "application/json",
+            Authorization: `Bearer ${getApiKey()}`,
+        };
     },
 };
 
