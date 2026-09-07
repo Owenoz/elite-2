@@ -7,11 +7,9 @@ import {
     TouchableOpacity,
     FlatList,
     Alert,
-    Linking,
     StyleSheet,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useEffect } from "react";
 
 import { icons } from "@/constants/icons";
@@ -26,6 +24,7 @@ import { addToDownloads } from "@/services/appwrite";
 import CastCard from "@/components/CastCard";
 import MovieCard from "@/components/MovieCard";
 import PaymentModal from "@/components/PaymentModal";
+import TrailerPlayer from "@/components/TrailerPlayer";
 
 interface MovieInfoProps {
     label: string;
@@ -47,6 +46,7 @@ const Details = () => {
     const [favoriteLoading, setFavoriteLoading] = useState(false);
     const [downloadLoading, setDownloadLoading] = useState(false);
     const [paymentVisible, setPaymentVisible] = useState(false);
+    const [trailerVisible, setTrailerVisible] = useState(false);
 
     const { data: movie, loading: movieLoading } = useFetch(() =>
         fetchMovieDetails(id as string)
@@ -106,30 +106,20 @@ const Details = () => {
         }
     };
 
-    const handlePlayTrailer = async () => {
+    const handlePlayTrailer = () => {
         if (!videos || videos.length === 0) {
             Alert.alert("No Trailer", "No trailer available for this movie");
             return;
         }
-        const trailer = videos.find(
-            (v: any) => v.type === "Trailer" || v.type === "Teaser"
-        );
+        const trailer = videos.find((v: any) => v.type === "Trailer" || v.type === "Teaser");
         if (!trailer) {
             Alert.alert("No Trailer", "No trailer available for this movie");
             return;
         }
-        const youtubeUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
-        try {
-            const supported = await Linking.canOpenURL(youtubeUrl);
-            if (supported) {
-                await Linking.openURL(youtubeUrl);
-            } else {
-                Alert.alert("Error", "Cannot open YouTube video");
-            }
-        } catch (error) {
-            Alert.alert("Error", "Failed to open trailer");
-        }
+        setTrailerVisible(true);
     };
+
+    const trailerKey = videos?.find((v: any) => v.type === "Trailer" || v.type === "Teaser")?.key || "";
 
     const loading = movieLoading || creditsLoading || similarLoading || videosLoading;
 
@@ -213,9 +203,9 @@ const Details = () => {
                                 <Image
                                     source={icons.play}
                                     style={[styles.iconSm, { marginRight: 8 }]}
-                                    tintColor="#fff"
+                                    tintColor="#000"
                                 />
-                                <Text style={styles.actionBtnText}>Watch Trailer</Text>
+                                <Text style={[styles.actionBtnText, { color: "#000" }]}>Watch Trailer</Text>
                             </TouchableOpacity>
                         )}
                         <TouchableOpacity
@@ -228,16 +218,16 @@ const Details = () => {
                             ]}
                         >
                             {downloadLoading ? (
-                                <ActivityIndicator color="#AB8BFF" />
+                                <ActivityIndicator color="#D4AF37" />
                             ) : (
                                 <>
                                     <Image
                                         source={icons.arrow}
                                         style={[styles.iconSm, { marginRight: 8, transform: [{ rotate: isDownloaded ? "0deg" : "90deg" }] }]}
-                                        tintColor={isDownloaded ? "#AB8BFF" : "#fff"}
+                                        tintColor={isDownloaded ? "#D4AF37" : "#fff"}
                                     />
-                                    <Text style={[styles.actionBtnText, isDownloaded && { color: "#AB8BFF" }]}>
-                                        {isDownloaded ? "Downloaded" : "Download"}
+                                    <Text style={[styles.actionBtnText, isDownloaded && { color: "#D4AF37" }]}>
+                                        {isDownloaded ? "Downloaded ✓" : "Download · 5,000 UGX"}
                                     </Text>
                                 </>
                             )}
@@ -338,6 +328,13 @@ const Details = () => {
                 onClose={() => setPaymentVisible(false)}
                 onPaymentSuccess={handlePaymentSuccess}
             />
+
+            <TrailerPlayer
+                visible={trailerVisible}
+                videoKey={trailerKey}
+                movieTitle={movie?.title || ""}
+                onClose={() => setTrailerVisible(false)}
+            />
         </View>
     );
 };
@@ -387,7 +384,7 @@ const styles = StyleSheet.create({
         flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
         paddingVertical: 12, borderRadius: 10,
     },
-    trailerBtn: { backgroundColor: COLORS.accent },
+    trailerBtn: { backgroundColor: "#D4AF37" },
     downloadBtn: { backgroundColor: COLORS.dark100 },
     disabledBtn: { opacity: 0.55 },
     actionBtnText: { color: COLORS.white, fontWeight: "600", fontSize: 14 },

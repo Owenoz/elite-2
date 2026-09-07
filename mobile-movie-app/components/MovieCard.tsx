@@ -1,61 +1,46 @@
 import { Link } from "expo-router";
-import { Text, Image, TouchableOpacity, View } from "react-native";
+import { Text, Image, TouchableOpacity, View, StyleSheet } from "react-native";
 
-import { icons } from "@/constants/icons";
-// Define the MovieCard component, accepting individual movie properties as props
-const MovieCard = ({
-                       id,
-                       poster_path,
-                       title,
-                       vote_average,
-                       release_date,
-                   }: Movie) => {
-    return (
-        // Link component from Expo Router to handle navigation.
-        // The 'asChild' prop passes the link's functionality to its direct child.
-        <Link href={`/movies/${id}`} asChild>
-            {/* TouchableOpacity makes the entire card pressable */}
-            <TouchableOpacity className="w-[30%]">
-                {/* Image component to display the movie poster */}
+const GOLD = "#D4AF37";
+const CARD = "#1C1B2E";
+
+const MovieCard = ({ id, poster_path, title, vote_average, release_date }: Movie) => (
+    <Link href={`/movies/${id}`} asChild>
+        <TouchableOpacity style={S.card} activeOpacity={0.85}>
+            <View style={S.posterWrap}>
                 <Image
                     source={{
                         uri: poster_path
-                            // Construct the full image URL if a poster_path exists
-                            ? `https://image.tmdb.org/t/p/w500${poster_path}`
-                            // Use a placeholder image if no poster is available
-                            : "https://placehold.co/600x400/1a1a1a/FFFFFF.png",
+                            ? `https://image.tmdb.org/t/p/w342${poster_path}`
+                            : "https://placehold.co/342x513/1C1B2E/D4AF37.png",
                     }}
-                    className="w-full h-52 rounded-lg"
+                    style={S.poster}
                     resizeMode="cover"
                 />
-
-                {/* Text component to display the movie title, limited to one line */}
-                <Text className="text-sm font-bold text-white mt-2" numberOfLines={1}>
-                    {title}
-                </Text>
-
-                {/* View container for the star rating */}
-                <View className="flex-row items-center justify-start gap-x-1">
-                    <Image source={icons.star} className="size-4" />
-                    <Text className="text-xs text-white font-bold uppercase">
-                        {/* Display the movie rating, rounded and scaled to a 5-star system */}
-                        {Math.round(vote_average / 2)}
-                    </Text>
+                {/* Rating badge */}
+                <View style={S.ratingBadge}>
+                    <Text style={S.ratingText}>⭐ {vote_average?.toFixed(1)}</Text>
                 </View>
+            </View>
+            <Text style={S.title} numberOfLines={2}>{title}</Text>
+            <Text style={S.year}>{release_date?.split("-")[0]}</Text>
+        </TouchableOpacity>
+    </Link>
+);
 
-                {/* View container for the release year and media type */}
-                <View className="flex-row items-center justify-between">
-                    <Text className="text-xs text-light-300 font-medium mt-1">
-                        {/* Display only the year from the release_date string */}
-                        {release_date?.split("-")[0]}
-                    </Text>
-                    {/* Static text indicating the media type */}
-                    <Text className="text-xs font-medium text-light-300 uppercase">
-                        Movie
-                    </Text>
-                </View>
-            </TouchableOpacity>
-        </Link>
-    );
-};
+const S = StyleSheet.create({
+    card: { width: "30%", marginBottom: 4 },
+    posterWrap: { position: "relative", borderRadius: 12, overflow: "hidden" },
+    poster: { width: "100%", height: 160, borderRadius: 12 },
+    ratingBadge: {
+        position: "absolute", top: 6, left: 6,
+        backgroundColor: "rgba(0,0,0,0.75)",
+        paddingHorizontal: 6, paddingVertical: 2,
+        borderRadius: 8, borderWidth: 1, borderColor: "rgba(212,175,55,0.3)",
+    },
+    ratingText: { color: GOLD, fontSize: 9, fontWeight: "700" },
+    title: { color: "#E5E5E5", fontSize: 11, fontWeight: "600", marginTop: 6, lineHeight: 15 },
+    year: { color: "#555", fontSize: 10, marginTop: 2 },
+});
+
 export default MovieCard;

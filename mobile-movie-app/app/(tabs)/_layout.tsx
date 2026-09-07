@@ -1,121 +1,102 @@
-import {View, Text} from 'react-native'
-import React from 'react'
-import {Tabs} from  "expo-router";
-import {ImageBackground, Image} from "react-native";
-import {images} from "@/constants/images";
-import {icons} from "@/constants/icons";
+import React from "react";
+import { Tabs } from "expo-router";
+import { View, Text, Image, StyleSheet } from "react-native";
+import { icons } from "@/constants/icons";
 
-// Define a reusable component for rendering tab icons
-const TabIcon = ({focused, icon, title}: any) => {
+const GOLD = "#D4AF37";
+const BG = "#0D0D17";
+const ACTIVE_BG = "#1C1B2E";
 
-    // Conditionally render the icon based on the 'focused' state
-    if (focused) {
-        // If the tab is active, show a highlighted background with the icon and title
-        return (
-            <ImageBackground
-                source={images.highlight}
-                className="flex flex-row w-full flex-1 min-w-[112px] min-h-16 mt-4 justify-center items-center rounded-full overflow-hidden"
-            >
-                <Image
-                    source={icon}
-                    tintColor="#151312" // Set a dark color for the icon on a light background
-                    className="size-5"
-                />
-                <Text className="text-secondary text-base font-semibold">{title}</Text>
-            </ImageBackground>
-        )
-    }
-    // If the tab is not active, show only the icon with a different tint color
-    return (
-        <View className="size-full justify-center">
-            <Image
-                source={icon}
-                tintColor="#A8B5DB" // A lighter color for inactive icons
-                className="size-5"
-            />
-        </View>
-    )
-}
+const TabIcon = ({ focused, icon, title }: { focused: boolean; icon: any; title: string }) => (
+    <View style={[S.tabItem, focused && S.tabItemActive]}>
+        <Image
+            source={icon}
+            style={S.tabIcon}
+            tintColor={focused ? GOLD : "#444"}
+        />
+        {focused && <Text style={S.tabLabel}>{title}</Text>}
+    </View>
+);
 
-// Define the main layout for the tab navigator
-const TabsLayout = () => {
-    return (
-        <Tabs
-            // Apply global styling options to the entire tab bar
-            screenOptions={{
-                tabBarShowLabel: false, // Hide the default text labels
-                // Style for each individual tab item
-                tabBarItemStyle: {
-                    width: "100%",
-                    height: "100%",
-                    justifyContent: "center",
-                    alignItems: "center",
-                },
-                // Style for the tab bar container
-                tabBarStyle: {
-                    backgroundColor: "#0F0D23", // Dark background color
-                    borderRadius: 50,
-                    marginHorizontal: 20,
-                    marginBottom: 36,
-                    height: 52,
-                    position: "absolute",
-                    overflow: "hidden",
-                    borderWidth: 1,
-                    borderColor: "#0F0D23",
-                },
+const TabsLayout = () => (
+    <Tabs
+        screenOptions={{
+            tabBarShowLabel: false,
+            tabBarStyle: S.tabBar,
+            tabBarItemStyle: S.tabBarItem,
+        }}
+    >
+        <Tabs.Screen
+            name="index"
+            options={{
+                title: "Home", headerShown: false,
+                tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={icons.home} title="Home" />,
             }}
-        >
-            {/* Define each screen within the tab navigator */}
-            <Tabs.Screen
-                name="index"
-                options={{
-                    title: 'Home',
-                    headerShown: false,
-                    tabBarIcon: ({focused}) => (
-                        <TabIcon focused={focused} icon={icons.home} title="Home" />
-                    )
-                }}
-            />
-            <Tabs.Screen
-                name="search"
-                options={{
-                    title: 'Search',
-                    headerShown: false,
-                    tabBarIcon: ({focused}) => (
-                        <TabIcon focused={focused} icon={icons.search} title="Search" />
-                    )
-                }}
-            />
-            <Tabs.Screen
-                name="save"
-                options={{
-                    title: 'Saved',
-                    headerShown: false,
-                    tabBarIcon: ({focused}) => (
-                        <TabIcon focused={focused} icon={icons.save} title="Saved" />
-                    )
-                }}
-            />
-            {/* saved.tsx is registered but hidden from tab bar — navigated to directly from profile */}
-            <Tabs.Screen
-                name="saved"
-                options={{
-                    title: 'Saved',
-                    headerShown: false,
-                    href: null, // hide from tab bar
-                }}
-            />
-            <Tabs.Screen
-                name="profile"
-                options={{
-                    title: 'Profile',
-                    headerShown: false,
-                    tabBarIcon: ({focused}) => (
-                        <TabIcon focused={focused} icon={icons.person} title="Profile" />
-                    )
-                }}
-            />
-        </Tabs>
-    )
-}
-export default TabsLayout
+        />
+        <Tabs.Screen
+            name="search"
+            options={{
+                title: "Search", headerShown: false,
+                tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={icons.search} title="Search" />,
+            }}
+        />
+        <Tabs.Screen
+            name="save"
+            options={{
+                title: "Saved", headerShown: false,
+                tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={icons.save} title="Saved" />,
+            }}
+        />
+        <Tabs.Screen
+            name="saved"
+            options={{ title: "Saved", headerShown: false, href: null }}
+        />
+        <Tabs.Screen
+            name="profile"
+            options={{
+                title: "Profile", headerShown: false,
+                tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon={icons.person} title="Profile" />,
+            }}
+        />
+    </Tabs>
+);
+
+const S = StyleSheet.create({
+    tabBar: {
+        backgroundColor: BG,
+        borderTopWidth: 1,
+        borderTopColor: "#1a1a28",
+        height: 70,
+        paddingBottom: 10,
+        paddingTop: 8,
+        position: "absolute",
+        borderRadius: 0,
+        elevation: 20,
+        shadowColor: "#000",
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
+    },
+    tabBarItem: {
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    tabItem: {
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        borderRadius: 20,
+        minWidth: 52,
+        flexDirection: "row",
+        gap: 6,
+    },
+    tabItemActive: {
+        backgroundColor: ACTIVE_BG,
+        borderWidth: 1,
+        borderColor: "#2a2840",
+    },
+    tabIcon: { width: 22, height: 22 },
+    tabLabel: { color: GOLD, fontSize: 12, fontWeight: "700" },
+});
+
+export default TabsLayout;

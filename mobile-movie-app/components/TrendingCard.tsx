@@ -1,47 +1,49 @@
 import { Link } from "expo-router";
-import MaskedView from "@react-native-masked-view/masked-view";
-import { View, Text, TouchableOpacity, Image } from "react-native";
-import { images } from "@/constants/images";
+import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
 
-const TrendingCard = ({
-                          movie: { movie_id, title, poster_url },
-                          index,
-                      }: TrendingCardProps) => {
-    return (
-        // Link component makes the entire card a navigational link
-        <Link href={`/movies/${movie_id}`} asChild>
-            <TouchableOpacity className="w-32 relative pl-5">
-                <Image
-                    source={{ uri: poster_url }}
-                    className="w-32 h-48 rounded-lg"
-                    resizeMode="cover"
-                />
-                {/* This view positions the ranking number */}
-                <View className="absolute bottom-9 -left-3.5 px-2 py-1 rounded-full">
-                    {/* MaskedView creates a "cutout" effect for the ranking number */}
-                    <MaskedView
-                        maskElement={
-                            // The mask is the ranking number text
-                            <Text className="font-bold text-white text-6xl">{index + 1}</Text>
-                        }
-                    >
-                        {/* The content visible through the mask is a gradient image */}
-                        <Image
-                            source={images.rankingGradient}
-                            className="size-14"
-                            resizeMode="cover"
-                        />
-                    </MaskedView>
-                </View>
-                <Text
-                    className="text-sm font-bold mt-2 text-light-200"
-                    numberOfLines={2}
-                >
-                    {title}
+const GOLD = "#D4AF37";
+
+const TrendingCard = ({ movie: { movie_id, title, poster_url }, index }: TrendingCardProps) => (
+    <Link href={`/movies/${movie_id}`} asChild>
+        <TouchableOpacity style={S.card} activeOpacity={0.88}>
+            {/* Rank badge */}
+            <View style={[S.rankBadge, index === 0 && S.rankFirst]}>
+                <Text style={[S.rankText, index === 0 && S.rankTextFirst]}>
+                    {index === 0 ? "👑" : `#${index + 1}`}
                 </Text>
-            </TouchableOpacity>
-        </Link>
-    );
-};
+            </View>
+            {/* Poster */}
+            <Image
+                source={{ uri: poster_url }}
+                style={S.poster}
+                resizeMode="cover"
+            />
+            {/* Glow for #1 */}
+            {index === 0 && <View style={S.goldGlow} />}
+            {/* Title */}
+            <Text style={S.title} numberOfLines={2}>{title}</Text>
+        </TouchableOpacity>
+    </Link>
+);
+
+const S = StyleSheet.create({
+    card: { width: 120, marginRight: 4 },
+    poster: { width: 120, height: 175, borderRadius: 14, borderWidth: 1.5, borderColor: "#2a2840" },
+    rankBadge: {
+        position: "absolute", top: 8, right: 8, zIndex: 10,
+        backgroundColor: "rgba(0,0,0,0.8)", borderRadius: 10,
+        paddingHorizontal: 7, paddingVertical: 3,
+        borderWidth: 1, borderColor: "#2a2840",
+    },
+    rankFirst: { borderColor: GOLD, backgroundColor: "rgba(0,0,0,0.9)" },
+    rankText: { color: "#A8B5DB", fontSize: 10, fontWeight: "800" },
+    rankTextFirst: { color: GOLD },
+    goldGlow: {
+        position: "absolute", top: 0, left: 0, right: 0, bottom: 32,
+        borderRadius: 14, borderWidth: 2, borderColor: GOLD,
+        shadowColor: GOLD, shadowOpacity: 0.6, shadowRadius: 10,
+    },
+    title: { color: "#A8B5DB", fontSize: 11, fontWeight: "600", marginTop: 7, lineHeight: 15 },
+});
 
 export default TrendingCard;
