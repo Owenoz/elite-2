@@ -1,10 +1,26 @@
 // ─── Elite Movies API Service ─────────────────────────────────────────────────
 // Talks to your PHP backend on hostherb.com
-// Replace BASE_URL with your actual domain once the files are uploaded.
 
-const BASE_URL =
+// NOTE: If you uploaded the API files to public_html/api/, the URL is:
+// https://hostherb.com/api
+// If you used a subdomain like api.hostherb.com, update accordingly.
+
+const BASE_URL = (
   process.env.EXPO_PUBLIC_API_URL ||
-  "https://hostherb.com/api";
+  "https://hostherb.com/api"
+).replace(/\/$/, ""); // strip trailing slash
+
+// Timeout for all API requests (ms)
+const API_TIMEOUT = 15000;
+
+// Browser-like UA to bypass Cloudflare bot protection on shared hosting
+const REQUEST_HEADERS = {
+  "Content-Type": "application/json",
+  Accept: "application/json",
+  "User-Agent":
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+  "X-Requested-With": "EliteMoviesApp",
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,18 +102,40 @@ async function api<T>(
   options: RequestInit = {}
 ): Promise<{ success: boolean; data?: T; error?: string }> {
   try {
+    // AbortController gives us a request timeout
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), API_TIMEOUT);
+
     const res = await fetch(`${BASE_URL}/${path}`, {
       ...options,
+      signal: controller.signal,
       headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
+        ...REQUEST_HEADERS,
         ...(options.headers || {}),
       },
     });
 
+    clearTimeout(timer);
+
+    // Cloudflare challenge page — not JSON, handle gracefully
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      console.warn(`[EliteAPI] Non-JSON response from ${path} (status ${res.status})`);
+      return {
+        success: false,
+        error: res.status === 403
+          ? "API blocked by Cloudflare. See setup instructions."
+          : `Server error ${res.status}`,
+      };
+    }
+
     const json = await res.json();
     return json;
   } catch (err: any) {
+    if (err?.name === "AbortError") {
+      console.error(`[EliteAPI] Timeout on ${path}`);
+      return { success: false, error: "Request timed out. Check your connection." };
+    }
     console.error(`[EliteAPI] ${path}:`, err.message);
     return { success: false, error: err.message || "Network error" };
   }

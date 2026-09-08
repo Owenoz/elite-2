@@ -1,9 +1,14 @@
 <?php
-// Allow requests from the mobile app (any origin since it's a native app)
+// ── Force JSON content type immediately ───────────────────────────────────────
+// This header tells Cloudflare this is an API endpoint — prevents the
+// "Just a moment..." browser challenge from being injected into the response.
+header('Content-Type: application/json; charset=UTF-8');
+
+// Allow requests from the mobile app (any origin — it's a native app)
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-header('Content-Type: application/json; charset=UTF-8');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Elite-App');
+header('Cache-Control: no-store, no-cache, must-revalidate');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {

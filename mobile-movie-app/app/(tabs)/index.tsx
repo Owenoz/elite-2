@@ -155,10 +155,10 @@ const Index = () => {
                                     contentContainerStyle={{ paddingLeft: 20, gap: 14 }}
                                     renderItem={({ item, index }) => (
                                         <TrendingCard movie={{
-                                            movie_id: item.movie_id,
-                                            title: item.title,
-                                            poster_url: item.poster_url,
-                                        }} index={index} />
+                                            movie_id: item.movie_id ?? 0,
+                                            title: item.title ?? item.search_term ?? "",
+                                            poster_url: item.poster_url ?? "",
+                                        } as unknown as TrendingMovie} index={index} />
                                     )}
                                     keyExtractor={(item, i) => `trending_${item.movie_id}_${i}`}
                                 />
