@@ -20,11 +20,21 @@ import {
     fetchSimilarMovies,
     fetchMovieVideos,
 } from "@/services/api";
-import { addToDownloads } from "@/services/appwrite";
+import {
+    getMovieByTmdbId,
+    createPayment,
+    completePayment,
+    hasAccessToMovie,
+    addFavorite,
+    removeFavorite,
+    isFavorited,
+    type SupabaseMovie,
+} from "@/services/supabase";
 import CastCard from "@/components/CastCard";
 import MovieCard from "@/components/MovieCard";
 import PaymentModal from "@/components/PaymentModal";
 import TrailerPlayer from "@/components/TrailerPlayer";
+import MoviePlayer from "@/components/MoviePlayer";
 
 interface MovieInfoProps {
     label: string;
@@ -47,6 +57,10 @@ const Details = () => {
     const [downloadLoading, setDownloadLoading] = useState(false);
     const [paymentVisible, setPaymentVisible] = useState(false);
     const [trailerVisible, setTrailerVisible] = useState(false);
+    // Supabase movie data (has archive identifier if movie is in our catalogue)
+    const [supabaseMovie, setSupabaseMovie] = useState<SupabaseMovie | null>(null);
+    const [moviePlayerVisible, setMoviePlayerVisible] = useState(false);
+    const [userEmail, setUserEmail] = useState<string | null>(null);
 
     const { data: movie, loading: movieLoading } = useFetch(() =>
         fetchMovieDetails(id as string)
@@ -64,17 +78,48 @@ const Details = () => {
     useEffect(() => {
         setIsFavorite(false);
         setIsDownloaded(false);
+        setSupabaseMovie(null);
+        setUserEmail(null);
+        // Load Supabase movie data (archive info)
+        if (id) {
+            getMovieByTmdbId(Number(id)).then(sm => {
+                if (sm) setSupabaseMovie(sm);
+            });
+        }
     }, [id]);
 
-    const handleFavoriteToggle = () => {
+    const handleFavoriteToggle = async () => {
         if (!movie) return;
-        setIsFavorite((prev) => !prev);
+        setFavoriteLoading(true);
+        try {
+            if (userEmail) {
+                if (isFavorite) {
+                    await removeFavorite(userEmail, movie.id);
+                } else {
+                    await addFavorite(
+                        userEmail, movie.id, movie.title,
+                        `https://image.tmdb.org/t/p/w500${movie.poster_path}`,
+                        movie.vote_average,
+                        parseInt(movie.release_date?.split("-")[0] || "0")
+                    );
+                }
+            }
+            setIsFavorite(prev => !prev);
+        } finally {
+            setFavoriteLoading(false);
+        }
     };
 
+    // Download = payment gate → on success either stream or record download
     const handleDownload = () => {
         if (!movie) return;
         if (isDownloaded) {
-            Alert.alert("Already Downloaded", "This movie is already in your downloads");
+            // Already paid — open movie player directly
+            if (supabaseMovie?.archive_identifier) {
+                setMoviePlayerVisible(true);
+            } else {
+                Alert.alert("Coming Soon", "This movie's stream is being set up. Check back soon.");
+            }
             return;
         }
         setPaymentVisible(true);
@@ -83,23 +128,32 @@ const Details = () => {
     const handlePaymentSuccess = async (email: string) => {
         setPaymentVisible(false);
         if (!movie) return;
+        setUserEmail(email);
         setDownloadLoading(true);
         try {
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-            await addToDownloads(
-                email,
-                {
-                    id: movie.id,
-                    title: movie.title,
-                    poster_path: movie.poster_path,
-                    release_date: movie.release_date,
-                    vote_average: movie.vote_average,
-                } as Movie,
-                "downloaded://movie/" + movie.id
-            );
+            // 1. Create payment record in Supabase
+            const ref = await createPayment(email, movie.id, movie.title);
+
+            // 2. Complete payment (simulate — in production hook into Flutterwave webhook)
+            const archiveUrl = supabaseMovie?.archive_url || "";
+            if (ref) {
+                await completePayment(ref, email, movie.id, movie.title, archiveUrl);
+            }
+
             setIsDownloaded(true);
+
+            // 3. If archive stream available, open player immediately
+            if (supabaseMovie?.archive_identifier) {
+                setTimeout(() => setMoviePlayerVisible(true), 500);
+            } else {
+                Alert.alert(
+                    "Payment Confirmed! ✅",
+                    "Your payment of 5,000 UGX has been recorded.\n\nThis movie's stream will be available soon.",
+                    [{ text: "OK" }]
+                );
+            }
         } catch (error) {
-            console.error("Download record error:", error);
+            console.error("Payment error:", error);
             setIsDownloaded(true);
         } finally {
             setDownloadLoading(false);
@@ -200,38 +254,42 @@ const Details = () => {
                                 onPress={handlePlayTrailer}
                                 style={[styles.actionBtn, styles.trailerBtn]}
                             >
-                                <Image
-                                    source={icons.play}
-                                    style={[styles.iconSm, { marginRight: 8 }]}
-                                    tintColor="#000"
-                                />
-                                <Text style={[styles.actionBtnText, { color: "#000" }]}>Watch Trailer</Text>
+                                <Image source={icons.play} style={[styles.iconSm, { marginRight: 8 }]} tintColor="#000" />
+                                <Text style={[styles.actionBtnText, { color: "#000" }]}>Trailer</Text>
                             </TouchableOpacity>
                         )}
-                        <TouchableOpacity
-                            onPress={handleDownload}
-                            disabled={downloadLoading || isDownloaded}
-                            style={[
-                                styles.actionBtn,
-                                styles.downloadBtn,
-                                (downloadLoading) && styles.disabledBtn,
-                            ]}
-                        >
-                            {downloadLoading ? (
-                                <ActivityIndicator color="#D4AF37" />
-                            ) : (
-                                <>
-                                    <Image
-                                        source={icons.arrow}
-                                        style={[styles.iconSm, { marginRight: 8, transform: [{ rotate: isDownloaded ? "0deg" : "90deg" }] }]}
-                                        tintColor={isDownloaded ? "#D4AF37" : "#fff"}
-                                    />
-                                    <Text style={[styles.actionBtnText, isDownloaded && { color: "#D4AF37" }]}>
-                                        {isDownloaded ? "Downloaded ✓" : "Download · 5,000 UGX"}
-                                    </Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
+                        {/* Watch Movie button — shown when movie is in archive catalogue */}
+                        {supabaseMovie?.archive_identifier && isDownloaded && (
+                            <TouchableOpacity
+                                style={[styles.actionBtn, styles.watchBtn]}
+                                onPress={() => setMoviePlayerVisible(true)}
+                            >
+                                <Image source={icons.play} style={[styles.iconSm, { marginRight: 8 }]} tintColor="#fff" />
+                                <Text style={styles.actionBtnText}>Watch Movie</Text>
+                            </TouchableOpacity>
+                        )}
+                        {/* Download / Access button */}
+                        {!isDownloaded && (
+                            <TouchableOpacity
+                                onPress={handleDownload}
+                                disabled={downloadLoading}
+                                style={[styles.actionBtn, styles.downloadBtn, downloadLoading && styles.disabledBtn]}
+                            >
+                                {downloadLoading ? (
+                                    <ActivityIndicator color="#D4AF37" />
+                                ) : (
+                                    <>
+                                        <Image source={icons.arrow}
+                                            style={[styles.iconSm, { marginRight: 8, transform: [{ rotate: "90deg" }] }]}
+                                            tintColor="#fff"
+                                        />
+                                        <Text style={styles.actionBtnText}>
+                                            {supabaseMovie?.archive_identifier ? "Watch · 5,000 UGX" : "Download · 5,000 UGX"}
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     {/* Genres */}
@@ -335,6 +393,17 @@ const Details = () => {
                 movieTitle={movie?.title || ""}
                 onClose={() => setTrailerVisible(false)}
             />
+
+            {/* Full movie player — Internet Archive stream */}
+            {supabaseMovie?.archive_identifier && (
+                <MoviePlayer
+                    visible={moviePlayerVisible}
+                    archiveIdentifier={supabaseMovie.archive_identifier}
+                    archiveUrl={supabaseMovie.archive_url || undefined}
+                    movieTitle={movie?.title || ""}
+                    onClose={() => setMoviePlayerVisible(false)}
+                />
+            )}
         </View>
     );
 };
@@ -386,6 +455,7 @@ const styles = StyleSheet.create({
     },
     trailerBtn: { backgroundColor: "#D4AF37" },
     downloadBtn: { backgroundColor: COLORS.dark100 },
+    watchBtn: { backgroundColor: "#1a5c1a" },
     disabledBtn: { opacity: 0.55 },
     actionBtnText: { color: COLORS.white, fontWeight: "600", fontSize: 14 },
     genreRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },

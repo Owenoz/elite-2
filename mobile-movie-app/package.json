@@ -11,11 +11,15 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "@react-native-async-storage/async-storage": "^2.1.0",
     "@expo/vector-icons": "^14.1.0",
+    "@react-native-async-storage/async-storage": "^3.1.1",
     "@react-native-masked-view/masked-view": "^0.3.2",
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
+    "@supabase/supabase-js": "^2.116.0",
     "expo": "~53.0.17",
     "expo-blur": "~14.1.5",
     "expo-constants": "~17.1.7",
