@@ -1,0 +1,29 @@
+Options -Indexes
+RewriteEngine On
+
+# Force HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Allow OPTIONS preflight through without auth
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=200,L]
+
+# Protect config and db files from direct access
+RewriteRule ^(config|db)\.php$ - [F,L]
+
+# Route clean URLs to PHP files
+# /api/movies        → movies.php
+# /api/payments      → payments.php
+# /api/downloads     → downloads.php
+# /api/favorites     → favorites.php
+# /api/search        → search.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([a-zA-Z_]+)$ $1.php [QSA,L]
+
+# Security headers
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-Frame-Options "DENY"
+Header always set X-XSS-Protection "1; mode=block"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"

@@ -15,12 +15,12 @@ import useFetch from "../../services/useFetch";
 import { fetchMovies } from "@/services/api";
 import { icons } from "@/constants/icons";
 import { images } from "@/constants/images";
-import SearchBar from "@/components/SearchBar";
+import { useState } from "react";
 import MovieCard from "@/components/MovieCard";
 import TrendingCard from "@/components/TrendingCard";
-import { getTrendingMovies } from "@/services/appwrite";
-import { useState } from "react";
+import SearchBar from "@/components/SearchBar";
 import ErrorMessage from "@/components/ErrorMessage";
+import { getTrending } from "@/services/eliteApi";
 
 const { width } = Dimensions.get("window");
 
@@ -44,7 +44,7 @@ const Index = () => {
         loading: trendingLoading,
         error: trendingError,
         refetch: refetchTrending,
-    } = useFetch(getTrendingMovies);
+    } = useFetch(() => getTrending(5));
 
     const {
         data: movies,
@@ -154,7 +154,11 @@ const Index = () => {
                                     data={trendingMovies}
                                     contentContainerStyle={{ paddingLeft: 20, gap: 14 }}
                                     renderItem={({ item, index }) => (
-                                        <TrendingCard movie={item} index={index} />
+                                        <TrendingCard movie={{
+                                            movie_id: item.movie_id,
+                                            title: item.title,
+                                            poster_url: item.poster_url,
+                                        }} index={index} />
                                     )}
                                     keyExtractor={(item, i) => `trending_${item.movie_id}_${i}`}
                                 />

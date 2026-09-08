@@ -1,0 +1,311 @@
+// ─── Elite Movies API Service ─────────────────────────────────────────────────
+// Talks to your PHP backend on hostherb.com
+// Replace BASE_URL with your actual domain once the files are uploaded.
+
+const BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ||
+  "https://hostherb.com/api";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface EliteMovie {
+  id: number;
+  tmdb_id: number;
+  title: string;
+  overview: string;
+  poster_path: string;
+  backdrop_path: string;
+  release_year: number;
+  vote_average: number;
+  runtime: number;
+  archive_identifier: string | null;
+  archive_url: string | null;
+  is_available: boolean;
+  created_at: string;
+}
+
+export interface PaymentCreateResult {
+  reference: string;
+  email_sent: boolean;
+  message: string;
+}
+
+export interface PaymentVerifyResult {
+  verified: boolean;
+  movie_id: number;
+  movie_title: string;
+  archive_url: string | null;
+  archive_identifier: string | null;
+  message: string;
+}
+
+export interface AccessResult {
+  has_access: boolean;
+  archive_url: string | null;
+  archive_identifier: string | null;
+}
+
+export interface FavoriteMovie {
+  id: number;
+  user_email: string;
+  movie_id: number;
+  title: string;
+  poster_url: string;
+  vote_average: number;
+  release_year: number;
+  created_at: string;
+}
+
+export interface DownloadedMovie {
+  id: number;
+  email: string;
+  movie_id: number;
+  movie_title: string;
+  archive_url: string;
+  archive_identifier: string | null;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  overview: string | null;
+  vote_average: number | null;
+  runtime: number | null;
+  downloaded_at: string;
+}
+
+export interface TrendingSearch {
+  search_term: string;
+  movie_id: number;
+  title: string;
+  poster_url: string;
+  count: number;
+}
+
+// ─── Core fetch wrapper ───────────────────────────────────────────────────────
+
+async function api<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<{ success: boolean; data?: T; error?: string }> {
+  try {
+    const res = await fetch(`${BASE_URL}/${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(options.headers || {}),
+      },
+    });
+
+    const json = await res.json();
+    return json;
+  } catch (err: any) {
+    console.error(`[EliteAPI] ${path}:`, err.message);
+    return { success: false, error: err.message || "Network error" };
+  }
+}
+
+// ─── Movies ───────────────────────────────────────────────────────────────────
+
+/** Get all available movies in the catalogue */
+export const getAvailableMovies = async (
+  page = 1,
+  limit = 20
+): Promise<EliteMovie[]> => {
+  const r = await api<{ movies: EliteMovie[] }>(
+    `movies?page=${page}&limit=${limit}`
+  );
+  return r.data?.movies ?? [];
+};
+
+/** Get a movie from the catalogue by its TMDB id (returns null if not added yet) */
+export const getMovieByTmdbId = async (
+  tmdbId: number
+): Promise<EliteMovie | null> => {
+  const r = await api<EliteMovie>(`movies?tmdb_id=${tmdbId}`);
+  return r.success && r.data ? r.data : null;
+};
+
+/** Search catalogue by title */
+export const searchCatalogue = async (
+  query: string
+): Promise<EliteMovie[]> => {
+  const r = await api<EliteMovie[]>(
+    `movies?search=${encodeURIComponent(query)}`
+  );
+  return r.data ?? [];
+};
+
+// ─── Payments ─────────────────────────────────────────────────────────────────
+
+/**
+ * Start a payment — creates a pending record and sends OTP to email.
+ * Returns the payment reference needed for verification.
+ */
+export const createPayment = async (
+  email: string,
+  movieId: number,
+  movieTitle: string
+): Promise<PaymentCreateResult | null> => {
+  const r = await api<PaymentCreateResult>("payments?action=create", {
+    method: "POST",
+    body: JSON.stringify({ email, movie_id: movieId, movie_title: movieTitle }),
+  });
+  if (!r.success) {
+    console.error("[EliteAPI] createPayment:", r.error);
+    return null;
+  }
+  return r.data ?? null;
+};
+
+/**
+ * Verify OTP → completes payment → returns archive stream info.
+ */
+export const verifyPayment = async (
+  email: string,
+  otp: string,
+  reference: string
+): Promise<PaymentVerifyResult | null> => {
+  const r = await api<PaymentVerifyResult>("payments?action=verify", {
+    method: "POST",
+    body: JSON.stringify({ email, otp, reference }),
+  });
+  if (!r.success) {
+    throw new Error(r.error || "Verification failed");
+  }
+  return r.data ?? null;
+};
+
+/**
+ * Resend OTP for an existing pending payment.
+ */
+export const resendOtp = async (
+  email: string,
+  reference: string
+): Promise<{ message: string } | null> => {
+  const r = await api<{ message: string }>("payments?action=resend", {
+    method: "POST",
+    body: JSON.stringify({ email, reference }),
+  });
+  return r.data ?? null;
+};
+
+/**
+ * Check if an email already has paid access to a movie.
+ */
+export const checkAccess = async (
+  email: string,
+  movieId: number
+): Promise<AccessResult> => {
+  const r = await api<AccessResult>(
+    `payments?email=${encodeURIComponent(email)}&movie_id=${movieId}`
+  );
+  return r.data ?? { has_access: false, archive_url: null, archive_identifier: null };
+};
+
+// ─── Downloads ────────────────────────────────────────────────────────────────
+
+/** Get all movies an email has paid for */
+export const getDownloads = async (
+  email: string
+): Promise<DownloadedMovie[]> => {
+  const r = await api<DownloadedMovie[]>(
+    `downloads?email=${encodeURIComponent(email)}`
+  );
+  return r.data ?? [];
+};
+
+/** Check access to a single movie + get its stream URL */
+export const getMovieAccess = async (
+  email: string,
+  movieId: number
+): Promise<AccessResult> => {
+  const r = await api<AccessResult>(
+    `downloads?email=${encodeURIComponent(email)}&movie_id=${movieId}`
+  );
+  return r.data ?? { has_access: false, archive_url: null, archive_identifier: null };
+};
+
+// ─── Favorites ────────────────────────────────────────────────────────────────
+
+export const getFavorites = async (
+  email: string
+): Promise<FavoriteMovie[]> => {
+  const r = await api<FavoriteMovie[]>(
+    `favorites?email=${encodeURIComponent(email)}`
+  );
+  return r.data ?? [];
+};
+
+export const checkFavorite = async (
+  email: string,
+  movieId: number
+): Promise<boolean> => {
+  const r = await api<{ is_favorited: boolean }>(
+    `favorites?email=${encodeURIComponent(email)}&movie_id=${movieId}`
+  );
+  return r.data?.is_favorited ?? false;
+};
+
+export const addFavorite = async (
+  email: string,
+  movieId: number,
+  title: string,
+  posterUrl: string,
+  voteAverage: number,
+  releaseYear: number
+): Promise<boolean> => {
+  const r = await api("favorites", {
+    method: "POST",
+    body: JSON.stringify({
+      email,
+      movie_id: movieId,
+      title,
+      poster_url: posterUrl,
+      vote_average: voteAverage,
+      release_year: releaseYear,
+    }),
+  });
+  return r.success;
+};
+
+export const removeFavorite = async (
+  email: string,
+  movieId: number
+): Promise<boolean> => {
+  const r = await api("favorites", {
+    method: "DELETE",
+    body: JSON.stringify({ email, movie_id: movieId }),
+  });
+  return r.success;
+};
+
+// ─── Search / Trending ────────────────────────────────────────────────────────
+
+export const getTrending = async (limit = 5): Promise<TrendingSearch[]> => {
+  const r = await api<TrendingSearch[]>(`search?limit=${limit}`);
+  return r.data ?? [];
+};
+
+export const trackSearch = async (
+  term: string,
+  movieId: number,
+  title: string,
+  posterUrl: string
+): Promise<void> => {
+  await api("search", {
+    method: "POST",
+    body: JSON.stringify({
+      search_term: term,
+      movie_id: movieId,
+      title,
+      poster_url: posterUrl,
+    }),
+  });
+};
+
+// ─── Internet Archive helpers (client-side, no backend needed) ────────────────
+
+export const getArchiveEmbedUrl = (identifier: string): string =>
+  `https://archive.org/embed/${identifier}?autoplay=1`;
+
+export const getArchiveDetailsUrl = (identifier: string): string =>
+  `https://archive.org/details/${identifier}`;

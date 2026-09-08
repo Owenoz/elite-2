@@ -8,7 +8,7 @@ import { icons } from "@/constants/icons";
 import useFetch from "../../services/useFetch";
 import { fetchMovies } from "@/services/api";
 import MovieCard from "@/components/MovieCard";
-import { updateSearchCount } from "@/services/appwrite";
+import { trackSearch } from "@/services/eliteApi";
 import { useRouter } from "expo-router";
 
 const { width } = Dimensions.get("window");
@@ -52,7 +52,8 @@ const Search = () => {
 
     useEffect(() => {
         if (movies.length > 0 && searchQuery.trim())
-            updateSearchCount(searchQuery, movies[0]);
+            trackSearch(searchQuery, movies[0].id, movies[0].title,
+                movies[0].poster_path ? `https://image.tmdb.org/t/p/w342${movies[0].poster_path}` : "");
     }, [movies]);
 
     const filtered = movies.filter(m =>

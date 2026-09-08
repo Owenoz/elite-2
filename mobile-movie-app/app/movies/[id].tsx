@@ -22,14 +22,13 @@ import {
 } from "@/services/api";
 import {
     getMovieByTmdbId,
-    createPayment,
-    completePayment,
-    hasAccessToMovie,
+    getMovieAccess,
     addFavorite,
     removeFavorite,
-    isFavorited,
-    type SupabaseMovie,
-} from "@/services/supabase";
+    checkFavorite,
+    type EliteMovie,
+    type PaymentVerifyResult,
+} from "@/services/eliteApi";
 import CastCard from "@/components/CastCard";
 import MovieCard from "@/components/MovieCard";
 import PaymentModal from "@/components/PaymentModal";
@@ -57,10 +56,12 @@ const Details = () => {
     const [downloadLoading, setDownloadLoading] = useState(false);
     const [paymentVisible, setPaymentVisible] = useState(false);
     const [trailerVisible, setTrailerVisible] = useState(false);
-    // Supabase movie data (has archive identifier if movie is in our catalogue)
-    const [supabaseMovie, setSupabaseMovie] = useState<SupabaseMovie | null>(null);
+    // Elite API movie data (has archive identifier if movie is in our catalogue)
+    const [eliteMovie, setEliteMovie] = useState<EliteMovie | null>(null);
     const [moviePlayerVisible, setMoviePlayerVisible] = useState(false);
     const [userEmail, setUserEmail] = useState<string | null>(null);
+    const [archiveIdentifier, setArchiveIdentifier] = useState<string | null>(null);
+    const [archiveUrl, setArchiveUrl] = useState<string | null>(null);
 
     const { data: movie, loading: movieLoading } = useFetch(() =>
         fetchMovieDetails(id as string)
@@ -78,12 +79,19 @@ const Details = () => {
     useEffect(() => {
         setIsFavorite(false);
         setIsDownloaded(false);
-        setSupabaseMovie(null);
+        setEliteMovie(null);
         setUserEmail(null);
-        // Load Supabase movie data (archive info)
+        setArchiveIdentifier(null);
+        setArchiveUrl(null);
+
         if (id) {
-            getMovieByTmdbId(Number(id)).then(sm => {
-                if (sm) setSupabaseMovie(sm);
+            // Load Elite API movie data (archive info if in catalogue)
+            getMovieByTmdbId(Number(id)).then(em => {
+                if (em) {
+                    setEliteMovie(em);
+                    setArchiveIdentifier(em.archive_identifier);
+                    setArchiveUrl(em.archive_url);
+                }
             });
         }
     }, [id]);
@@ -110,12 +118,12 @@ const Details = () => {
         }
     };
 
-    // Download = payment gate → on success either stream or record download
+    // Download = payment gate → on success open MoviePlayer
     const handleDownload = () => {
         if (!movie) return;
         if (isDownloaded) {
-            // Already paid — open movie player directly
-            if (supabaseMovie?.archive_identifier) {
+            // Already paid — open player directly
+            if (archiveIdentifier) {
                 setMoviePlayerVisible(true);
             } else {
                 Alert.alert("Coming Soon", "This movie's stream is being set up. Check back soon.");
@@ -125,38 +133,20 @@ const Details = () => {
         setPaymentVisible(true);
     };
 
-    const handlePaymentSuccess = async (email: string) => {
+    // Called by PaymentModal after real OTP verification on the server
+    const handlePaymentSuccess = (email: string, result: PaymentVerifyResult) => {
         setPaymentVisible(false);
-        if (!movie) return;
         setUserEmail(email);
-        setDownloadLoading(true);
-        try {
-            // 1. Create payment record in Supabase
-            const ref = await createPayment(email, movie.id, movie.title);
 
-            // 2. Complete payment (simulate — in production hook into Flutterwave webhook)
-            const archiveUrl = supabaseMovie?.archive_url || "";
-            if (ref) {
-                await completePayment(ref, email, movie.id, movie.title, archiveUrl);
-            }
+        // Use archive info returned from the server (most up to date)
+        if (result.archive_identifier) setArchiveIdentifier(result.archive_identifier);
+        if (result.archive_url)        setArchiveUrl(result.archive_url);
 
-            setIsDownloaded(true);
+        setIsDownloaded(true);
 
-            // 3. If archive stream available, open player immediately
-            if (supabaseMovie?.archive_identifier) {
-                setTimeout(() => setMoviePlayerVisible(true), 500);
-            } else {
-                Alert.alert(
-                    "Payment Confirmed! ✅",
-                    "Your payment of 5,000 UGX has been recorded.\n\nThis movie's stream will be available soon.",
-                    [{ text: "OK" }]
-                );
-            }
-        } catch (error) {
-            console.error("Payment error:", error);
-            setIsDownloaded(true);
-        } finally {
-            setDownloadLoading(false);
+        // Open the player immediately after payment confirmed
+        if (result.archive_identifier || archiveIdentifier) {
+            setTimeout(() => setMoviePlayerVisible(true), 300);
         }
     };
 
@@ -258,8 +248,8 @@ const Details = () => {
                                 <Text style={[styles.actionBtnText, { color: "#000" }]}>Trailer</Text>
                             </TouchableOpacity>
                         )}
-                        {/* Watch Movie button — shown when movie is in archive catalogue */}
-                        {supabaseMovie?.archive_identifier && isDownloaded && (
+                        {/* Watch Movie — shown when paid + archive available */}
+                        {isDownloaded && archiveIdentifier && (
                             <TouchableOpacity
                                 style={[styles.actionBtn, styles.watchBtn]}
                                 onPress={() => setMoviePlayerVisible(true)}
@@ -268,7 +258,7 @@ const Details = () => {
                                 <Text style={styles.actionBtnText}>Watch Movie</Text>
                             </TouchableOpacity>
                         )}
-                        {/* Download / Access button */}
+                        {/* Download / Access button — only when not yet paid */}
                         {!isDownloaded && (
                             <TouchableOpacity
                                 onPress={handleDownload}
@@ -284,7 +274,7 @@ const Details = () => {
                                             tintColor="#fff"
                                         />
                                         <Text style={styles.actionBtnText}>
-                                            {supabaseMovie?.archive_identifier ? "Watch · 5,000 UGX" : "Download · 5,000 UGX"}
+                                            {archiveIdentifier ? "Watch · 5,000 UGX" : "Download · 5,000 UGX"}
                                         </Text>
                                     </>
                                 )}
@@ -383,6 +373,7 @@ const Details = () => {
             <PaymentModal
                 visible={paymentVisible}
                 movieTitle={movie?.title || ""}
+                movieId={movie?.id || 0}
                 onClose={() => setPaymentVisible(false)}
                 onPaymentSuccess={handlePaymentSuccess}
             />
@@ -395,11 +386,11 @@ const Details = () => {
             />
 
             {/* Full movie player — Internet Archive stream */}
-            {supabaseMovie?.archive_identifier && (
+            {archiveIdentifier && (
                 <MoviePlayer
                     visible={moviePlayerVisible}
-                    archiveIdentifier={supabaseMovie.archive_identifier}
-                    archiveUrl={supabaseMovie.archive_url || undefined}
+                    archiveIdentifier={archiveIdentifier}
+                    archiveUrl={archiveUrl || undefined}
                     movieTitle={movie?.title || ""}
                     onClose={() => setMoviePlayerVisible(false)}
                 />

@@ -1,120 +1,138 @@
 import React, { useState } from "react";
 import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
+  Modal, View, Text, TextInput, TouchableOpacity,
+  Image, ActivityIndicator, Alert, KeyboardAvoidingView,
+  Platform, ScrollView, StyleSheet,
 } from "react-native";
 import { icons } from "@/constants/icons";
+import {
+  createPayment,
+  verifyPayment,
+  resendOtp,
+  type PaymentVerifyResult,
+} from "@/services/eliteApi";
 
 interface PaymentModalProps {
   visible: boolean;
   movieTitle: string;
+  movieId: number;
   onClose: () => void;
-  onPaymentSuccess: (email: string) => void;
+  /** Called with email + full verify result after successful payment */
+  onPaymentSuccess: (email: string, result: PaymentVerifyResult) => void;
 }
 
-// Simulated verified email store (in production this would be a backend call)
-const VERIFIED_EMAILS_KEY = "verified_emails";
-
-// Simple in-memory store for this session
-const verifiedEmails: Set<string> = new Set();
+const GOLD = "#D4AF37";
+const SHEET_BG = "#0D0D17";
+const CARD = "#1C1B2E";
 
 const PaymentModal = ({
-  visible,
-  movieTitle,
-  onClose,
-  onPaymentSuccess,
+  visible, movieTitle, movieId, onClose, onPaymentSuccess,
 }: PaymentModalProps) => {
   const [step, setStep] = useState<"payment" | "verify" | "success">("payment");
-  const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [generatedOtp, setGeneratedOtp] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail]           = useState("");
+  const [otp, setOtp]               = useState("");
+  const [reference, setReference]   = useState("");
+  const [loading, setLoading]       = useState(false);
   const [emailError, setEmailError] = useState("");
-  const [otpError, setOtpError] = useState("");
-
-  const AMOUNT = "5,000 UGX";
+  const [otpError, setOtpError]     = useState("");
+  const [verifyResult, setVerifyResult] = useState<PaymentVerifyResult | null>(null);
 
   const isValidEmail = (e: string) => /\S+@\S+\.\S+/.test(e);
 
-  const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
-
+  // ── Step 1: Pay ─────────────────────────────────────────────────────────────
   const handlePayNow = async () => {
-    if (!email) {
-      setEmailError("Email is required");
-      return;
-    }
-    if (!isValidEmail(email)) {
-      setEmailError("Enter a valid email address");
-      return;
-    }
+    if (!email) { setEmailError("Email is required"); return; }
+    if (!isValidEmail(email)) { setEmailError("Enter a valid email address"); return; }
     setEmailError("");
-
-    // If email was already verified in this session, skip OTP
-    if (verifiedEmails.has(email.toLowerCase())) {
-      setLoading(true);
-      await new Promise((r) => setTimeout(r, 1000));
-      setLoading(false);
-      setStep("success");
-      onPaymentSuccess(email.toLowerCase());
-      return;
-    }
-
     setLoading(true);
-    // Simulate sending OTP to email
-    await new Promise((r) => setTimeout(r, 1500));
-    const code = generateOtp();
-    setGeneratedOtp(code);
-    setLoading(false);
 
-    // In a real app this goes to backend — for demo we show it in an alert
-    Alert.alert(
-      "Verification Code Sent",
-      `A 6-digit code has been sent to ${email}\n\n[Demo mode: your code is ${code}]`,
-      [{ text: "OK" }]
-    );
-    setStep("verify");
+    try {
+      const result = await createPayment(email.toLowerCase().trim(), movieId, movieTitle);
+
+      if (!result) {
+        Alert.alert("Error", "Could not initiate payment. Please try again.");
+        return;
+      }
+
+      // Already paid — skip straight to success
+      if ((result as any).already_paid) {
+        setStep("success");
+        onPaymentSuccess(email.toLowerCase(), {
+          verified: true,
+          movie_id: movieId,
+          movie_title: movieTitle,
+          archive_url: null,
+          archive_identifier: null,
+          message: "You already have access to this movie.",
+        });
+        return;
+      }
+
+      setReference(result.reference);
+
+      Alert.alert(
+        "📧 Check Your Email",
+        result.email_sent
+          ? `A 6-digit code was sent to:\n${email}`
+          : `Code generated. Check email or try: ${result.message}`,
+        [{ text: "OK" }]
+      );
+      setStep("verify");
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Payment failed. Try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleVerifyOtp = async () => {
-    if (!otp) {
-      setOtpError("Please enter the verification code");
-      return;
-    }
-    if (otp !== generatedOtp) {
-      setOtpError("Invalid code. Please try again.");
-      return;
-    }
+  // ── Step 2: Verify OTP ───────────────────────────────────────────────────────
+  const handleVerify = async () => {
+    if (!otp || otp.length < 6) { setOtpError("Enter the 6-digit code"); return; }
     setOtpError("");
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
 
-    // Mark email as verified for this session
-    verifiedEmails.add(email.toLowerCase());
+    try {
+      const result = await verifyPayment(email.toLowerCase().trim(), otp.trim(), reference);
 
-    setStep("success");
-    onPaymentSuccess(email.toLowerCase());
+      if (!result) {
+        setOtpError("Invalid or expired code. Try again.");
+        return;
+      }
+
+      setVerifyResult(result);
+      setStep("success");
+      onPaymentSuccess(email.toLowerCase(), result);
+    } catch (err: any) {
+      setOtpError(err.message || "Verification failed. Check your code.");
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // ── Resend OTP ───────────────────────────────────────────────────────────────
+  const handleResend = async () => {
+    if (!reference) return;
+    setLoading(true);
+    try {
+      const r = await resendOtp(email.toLowerCase(), reference);
+      Alert.alert("Code Resent", r?.message || `New code sent to ${email}`);
+    } catch {
+      Alert.alert("Error", "Could not resend code. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Close / reset ─────────────────────────────────────────────────────────────
   const handleClose = () => {
     setStep("payment");
-    setEmail("");
-    setOtp("");
-    setGeneratedOtp("");
-    setEmailError("");
-    setOtpError("");
+    setEmail(""); setOtp(""); setReference("");
+    setEmailError(""); setOtpError("");
+    setVerifyResult(null);
     onClose();
   };
+
+  // ─────────────────────────────────────────────────────────────────────────────
 
   return (
     <Modal
@@ -125,142 +143,158 @@ const PaymentModal = ({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.overlay}
+        style={S.overlay}
       >
-        <View style={styles.overlay}>
-          <TouchableOpacity style={styles.backdrop} onPress={handleClose} activeOpacity={1} />
-
-          <View style={styles.sheet}>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-              {/* Header */}
-              <View style={styles.header}>
-                <Text style={styles.headerTitle}>
-                  {step === "success" ? "Payment Complete" : "Download Movie"}
-                </Text>
-                <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-                  <Text style={styles.closeX}>✕</Text>
+        <View style={S.overlay}>
+          <TouchableOpacity style={S.backdrop} onPress={handleClose} activeOpacity={1} />
+          <View style={S.sheet}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* ── Header ── */}
+              <View style={S.header}>
+                <View style={S.headerLeft}>
+                  <View style={S.goldDot} />
+                  <Text style={S.headerTitle}>
+                    {step === "success" ? "Access Granted 🎬" : "Elite Movies Pay"}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={handleClose} style={S.closeBtn}>
+                  <Text style={S.closeX}>✕</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* ─── STEP 1: Payment ─── */}
+              {/* ══ STEP 1: Payment details ══════════════════════════════════ */}
               {step === "payment" && (
-                <View style={styles.body}>
-                  {/* Movie info */}
-                  <View style={styles.movieRow}>
-                    <Image source={icons.play} style={styles.movieIcon} tintColor="#AB8BFF" />
-                    <Text style={styles.movieTitle} numberOfLines={2}>{movieTitle}</Text>
+                <View style={S.body}>
+                  {/* Movie row */}
+                  <View style={S.movieRow}>
+                    <Image source={icons.play} style={S.movieIcon} tintColor={GOLD} />
+                    <Text style={S.movieTitle} numberOfLines={2}>{movieTitle}</Text>
                   </View>
 
-                  {/* Amount */}
-                  <View style={styles.amountBox}>
-                    <Text style={styles.amountLabel}>Download Fee</Text>
-                    <Text style={styles.amountValue}>{AMOUNT}</Text>
-                    <Text style={styles.amountSub}>One-time payment per device</Text>
+                  {/* Amount box */}
+                  <View style={S.amountBox}>
+                    <Text style={S.amountLabel}>ONE-TIME ACCESS FEE</Text>
+                    <Text style={S.amountValue}>5,000 UGX</Text>
+                    <Text style={S.amountSub}>Lifetime access · Verified by email</Text>
                   </View>
 
-                  {/* Payment method badge */}
-                  <View style={styles.methodRow}>
-                    <View style={styles.methodBadge}>
-                      <Text style={styles.methodText}>📱 Mobile Money</Text>
-                    </View>
-                    <View style={styles.methodBadge}>
-                      <Text style={styles.methodText}>💳 Card</Text>
-                    </View>
+                  {/* Method badges */}
+                  <View style={S.methodRow}>
+                    {["📱 MTN MoMo", "📱 Airtel Money", "💳 Card"].map(m => (
+                      <View key={m} style={S.methodBadge}>
+                        <Text style={S.methodText}>{m}</Text>
+                      </View>
+                    ))}
                   </View>
 
-                  {/* Email field */}
-                  <Text style={styles.label}>Email Address</Text>
-                  <Text style={styles.sublabel}>
-                    Used to verify your device and send confirmation
-                  </Text>
+                  {/* Email */}
+                  <Text style={S.label}>Your Email</Text>
+                  <Text style={S.sublabel}>We'll send a verification code + receipt here</Text>
                   <TextInput
-                    style={[styles.input, emailError ? styles.inputError : null]}
-                    placeholder="Enter your email"
-                    placeholderTextColor="#6B7280"
+                    style={[S.input, !!emailError && S.inputError]}
+                    placeholder="you@example.com"
+                    placeholderTextColor="#444"
                     value={email}
-                    onChangeText={(t) => { setEmail(t); setEmailError(""); }}
+                    onChangeText={t => { setEmail(t); setEmailError(""); }}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
-                  {!!emailError && <Text style={styles.errorText}>{emailError}</Text>}
+                  {!!emailError && <Text style={S.errorText}>⚠ {emailError}</Text>}
 
                   {/* Pay button */}
                   <TouchableOpacity
-                    style={[styles.payBtn, loading && styles.btnDisabled]}
+                    style={[S.payBtn, loading && S.btnDisabled]}
                     onPress={handlePayNow}
                     disabled={loading}
                   >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.payBtnText}>Pay {AMOUNT} & Download</Text>
-                    )}
+                    {loading
+                      ? <ActivityIndicator color="#000" />
+                      : <Text style={S.payBtnText}>Pay 5,000 UGX & Get Access</Text>
+                    }
                   </TouchableOpacity>
 
-                  <Text style={styles.secureNote}>🔒 Secure payment · Device verified by email</Text>
+                  <Text style={S.secureNote}>
+                    🔒 Payments verified by email · No account needed
+                  </Text>
                 </View>
               )}
 
-              {/* ─── STEP 2: OTP Verification ─── */}
+              {/* ══ STEP 2: OTP Verification ═════════════════════════════════ */}
               {step === "verify" && (
-                <View style={styles.body}>
-                  <View style={styles.otpIconWrap}>
-                    <Text style={styles.otpIcon}>📧</Text>
+                <View style={S.body}>
+                  <View style={S.iconCenter}>
+                    <Text style={S.bigIcon}>📧</Text>
                   </View>
-                  <Text style={styles.otpTitle}>Check your email</Text>
-                  <Text style={styles.otpSub}>
+                  <Text style={S.stepTitle}>Enter your code</Text>
+                  <Text style={S.stepSub}>
                     We sent a 6-digit code to{"\n"}
-                    <Text style={styles.otpEmail}>{email}</Text>
+                    <Text style={S.highlight}>{email}</Text>
                   </Text>
 
-                  <Text style={styles.label}>Verification Code</Text>
+                  <Text style={S.label}>6-Digit Code</Text>
                   <TextInput
-                    style={[styles.input, styles.otpInput, otpError ? styles.inputError : null]}
-                    placeholder="000000"
-                    placeholderTextColor="#6B7280"
+                    style={[S.input, S.otpInput, !!otpError && S.inputError]}
+                    placeholder="• • • • • •"
+                    placeholderTextColor="#333"
                     value={otp}
-                    onChangeText={(t) => { setOtp(t); setOtpError(""); }}
+                    onChangeText={t => { setOtp(t); setOtpError(""); }}
                     keyboardType="number-pad"
                     maxLength={6}
                     textAlign="center"
                   />
-                  {!!otpError && <Text style={styles.errorText}>{otpError}</Text>}
+                  {!!otpError && <Text style={S.errorText}>⚠ {otpError}</Text>}
 
                   <TouchableOpacity
-                    style={[styles.payBtn, loading && styles.btnDisabled]}
-                    onPress={handleVerifyOtp}
+                    style={[S.payBtn, loading && S.btnDisabled]}
+                    onPress={handleVerify}
                     disabled={loading}
                   >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.payBtnText}>Verify & Download</Text>
-                    )}
+                    {loading
+                      ? <ActivityIndicator color="#000" />
+                      : <Text style={S.payBtnText}>Verify & Unlock Movie</Text>
+                    }
                   </TouchableOpacity>
 
-                  <TouchableOpacity onPress={() => setStep("payment")} style={styles.backLink}>
-                    <Text style={styles.backLinkText}>← Change email</Text>
-                  </TouchableOpacity>
+                  <View style={S.row}>
+                    <TouchableOpacity onPress={() => setStep("payment")}>
+                      <Text style={S.linkText}>← Change email</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleResend} disabled={loading}>
+                      <Text style={S.linkText}>Resend code →</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
 
-              {/* ─── STEP 3: Success ─── */}
+              {/* ══ STEP 3: Success ══════════════════════════════════════════ */}
               {step === "success" && (
-                <View style={styles.body}>
-                  <View style={styles.successIconWrap}>
-                    <Text style={styles.successIcon}>✅</Text>
+                <View style={S.body}>
+                  <View style={S.iconCenter}>
+                    <Text style={S.bigIcon}>✅</Text>
                   </View>
-                  <Text style={styles.successTitle}>Download Started!</Text>
-                  <Text style={styles.successSub}>
-                    Payment confirmed for{"\n"}
-                    <Text style={styles.otpEmail}>{email}</Text>
+                  <Text style={S.stepTitle}>Payment Confirmed!</Text>
+                  <Text style={S.stepSub}>
+                    You now have lifetime access to{"\n"}
+                    <Text style={S.highlight}>{movieTitle}</Text>
                   </Text>
-                  <Text style={styles.successMovie} numberOfLines={2}>{movieTitle}</Text>
 
-                  <TouchableOpacity style={styles.doneBtn} onPress={handleClose}>
-                    <Text style={styles.payBtnText}>Done</Text>
+                  <View style={S.receiptBox}>
+                    <Text style={S.receiptRow}>📧 {email}</Text>
+                    <Text style={S.receiptRow}>💰 5,000 UGX</Text>
+                    <Text style={S.receiptRow}>🎬 {movieTitle}</Text>
+                    {!!verifyResult?.archive_identifier && (
+                      <Text style={S.receiptRow}>
+                        📼 Stream: {verifyResult.archive_identifier}
+                      </Text>
+                    )}
+                  </View>
+
+                  <TouchableOpacity style={S.doneBtn} onPress={handleClose}>
+                    <Text style={S.payBtnText}>▶ Watch Movie Now</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -272,110 +306,95 @@ const PaymentModal = ({
   );
 };
 
-const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
+const S = StyleSheet.create({
+  overlay:     { flex: 1, justifyContent: "flex-end" },
+  backdrop:    { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.7)" },
   sheet: {
-    backgroundColor: "#0F0D23",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 40,
-    borderTopWidth: 1,
-    borderColor: "#1a1836",
-    maxHeight: "90%",
+    backgroundColor: SHEET_BG,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingBottom: 44, maxHeight: "92%",
+    borderTopWidth: 1, borderColor: "#2a2840",
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderColor: "#1a1836",
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14,
+    borderBottomWidth: 1, borderColor: "#1a1836",
   },
+  headerLeft:  { flexDirection: "row", alignItems: "center", gap: 8 },
+  goldDot:     { width: 8, height: 8, borderRadius: 4, backgroundColor: GOLD },
   headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
-  closeBtn: { padding: 4 },
-  closeX: { color: "#9CA4AB", fontSize: 18 },
-  body: { paddingHorizontal: 20, paddingTop: 16 },
+  closeBtn:    { padding: 6, backgroundColor: "#1C1B2E", borderRadius: 14 },
+  closeX:      { color: "#666", fontSize: 16 },
+  body:        { paddingHorizontal: 20, paddingTop: 18 },
+
   movieRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1a1836",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: CARD, borderRadius: 14,
+    padding: 14, marginBottom: 16,
+    borderWidth: 1, borderColor: "#2a2840",
   },
-  movieIcon: { width: 24, height: 24, marginRight: 10 },
+  movieIcon:  { width: 22, height: 22, marginRight: 10 },
   movieTitle: { color: "#fff", fontSize: 14, fontWeight: "600", flex: 1 },
+
   amountBox: {
-    backgroundColor: "#AB8BFF20",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#AB8BFF40",
+    backgroundColor: "rgba(212,175,55,0.08)", borderRadius: 16,
+    padding: 20, alignItems: "center", marginBottom: 16,
+    borderWidth: 1, borderColor: "rgba(212,175,55,0.3)",
   },
-  amountLabel: { color: "#9CA4AB", fontSize: 12, marginBottom: 4 },
-  amountValue: { color: "#AB8BFF", fontSize: 28, fontWeight: "800" },
-  amountSub: { color: "#6B7280", fontSize: 11, marginTop: 4 },
-  methodRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  methodBadge: {
-    backgroundColor: "#1a1836",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#2a2850",
+  amountLabel: { color: GOLD, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 6 },
+  amountValue: { color: GOLD, fontSize: 34, fontWeight: "900" },
+  amountSub:   { color: "#666", fontSize: 11, marginTop: 6 },
+
+  methodRow:  { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 },
+  methodBadge:{
+    backgroundColor: CARD, borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderWidth: 1, borderColor: "#2a2840",
   },
-  methodText: { color: "#9CA4AB", fontSize: 12 },
-  label: { color: "#fff", fontSize: 14, fontWeight: "600", marginBottom: 4 },
-  sublabel: { color: "#9CA4AB", fontSize: 12, marginBottom: 10 },
+  methodText: { color: "#888", fontSize: 11 },
+
+  label:    { color: "#fff", fontSize: 13, fontWeight: "700", marginBottom: 4 },
+  sublabel: { color: "#666", fontSize: 11, marginBottom: 10 },
   input: {
-    backgroundColor: "#1a1836",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#2a2850",
-    color: "#fff",
-    fontSize: 15,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: "#2a2840",
+    color: "#fff", fontSize: 15, paddingHorizontal: 16, paddingVertical: 14,
     marginBottom: 8,
   },
-  otpInput: { fontSize: 24, fontWeight: "700", letterSpacing: 8 },
+  otpInput:   { fontSize: 28, fontWeight: "800", letterSpacing: 10, textAlign: "center" },
   inputError: { borderColor: "#EF4444" },
-  errorText: { color: "#EF4444", fontSize: 12, marginBottom: 8 },
+  errorText:  { color: "#EF4444", fontSize: 12, marginBottom: 8 },
+
   payBtn: {
-    backgroundColor: "#AB8BFF",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 8,
-    marginBottom: 8,
+    backgroundColor: GOLD, borderRadius: 14,
+    paddingVertical: 15, alignItems: "center",
+    marginTop: 8, marginBottom: 10,
+    shadowColor: GOLD, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6,
   },
   doneBtn: {
-    backgroundColor: "#22c55e",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 16,
+    backgroundColor: "#16a34a", borderRadius: 14,
+    paddingVertical: 15, alignItems: "center", marginTop: 16,
   },
-  btnDisabled: { opacity: 0.6 },
-  payBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  secureNote: { color: "#6B7280", fontSize: 11, textAlign: "center", marginTop: 8 },
-  otpIconWrap: { alignItems: "center", marginVertical: 16 },
-  otpIcon: { fontSize: 48 },
-  otpTitle: { color: "#fff", fontSize: 20, fontWeight: "700", textAlign: "center", marginBottom: 8 },
-  otpSub: { color: "#9CA4AB", fontSize: 14, textAlign: "center", marginBottom: 24, lineHeight: 22 },
-  otpEmail: { color: "#AB8BFF", fontWeight: "700" },
-  backLink: { alignItems: "center", marginTop: 12 },
-  backLinkText: { color: "#9CA4AB", fontSize: 13 },
-  successIconWrap: { alignItems: "center", marginVertical: 16 },
-  successIcon: { fontSize: 56 },
-  successTitle: { color: "#fff", fontSize: 22, fontWeight: "800", textAlign: "center", marginBottom: 8 },
-  successSub: { color: "#9CA4AB", fontSize: 14, textAlign: "center", marginBottom: 12, lineHeight: 22 },
-  successMovie: { color: "#AB8BFF", fontSize: 15, fontWeight: "600", textAlign: "center", marginBottom: 8 },
+  btnDisabled: { opacity: 0.55 },
+  payBtnText:  { color: "#000", fontSize: 16, fontWeight: "800" },
+  secureNote:  { color: "#444", fontSize: 11, textAlign: "center", marginBottom: 8 },
+
+  iconCenter: { alignItems: "center", marginVertical: 16 },
+  bigIcon:    { fontSize: 52 },
+  stepTitle:  { color: "#fff", fontSize: 22, fontWeight: "800", textAlign: "center", marginBottom: 8 },
+  stepSub:    { color: "#888", fontSize: 14, textAlign: "center", lineHeight: 22, marginBottom: 20 },
+  highlight:  { color: GOLD, fontWeight: "700" },
+
+  row: {
+    flexDirection: "row", justifyContent: "space-between",
+    marginTop: 6, marginBottom: 8,
+  },
+  linkText: { color: "#666", fontSize: 12 },
+
+  receiptBox: {
+    backgroundColor: CARD, borderRadius: 14, padding: 16,
+    marginVertical: 16, borderWidth: 1, borderColor: "#2a2840", gap: 8,
+  },
+  receiptRow: { color: "#A8B5DB", fontSize: 13 },
 });
 
 export default PaymentModal;
