@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -9,143 +9,203 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
+  Alert,
+  Linking,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { icons } from "@/constants/icons";
 
-const { width, height } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
 
 interface TrailerPlayerProps {
-  videoKey: string;       // YouTube video key e.g. "dQw4w9WgXcQ"
+  videoKey: string;
   movieTitle: string;
   visible: boolean;
   onClose: () => void;
 }
 
+// YouTube mobile watch URL — loads the actual YouTube player (not iframe embed)
+// This avoids Error 153 which only affects iframe/embed usage in WebViews
+const getYouTubeUrl = (key: string) =>
+  `https://m.youtube.com/watch?v=${key}&autoplay=1`;
+
+// Desktop Chrome UA makes YouTube serve the full-featured player
+const DESKTOP_UA =
+  "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
+
 const TrailerPlayer = ({ videoKey, movieTitle, visible, onClose }: TrailerPlayerProps) => {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  const embedUrl = `https://www.youtube.com/embed/${videoKey}?autoplay=1&rel=0&modestbranding=1&playsinline=1`;
+  const handleOpenExternal = () => {
+    const url = `https://www.youtube.com/watch?v=${videoKey}`;
+    Linking.openURL(url).catch(() =>
+      Alert.alert("Error", "Could not open YouTube")
+    );
+  };
 
-  // Full-screen HTML that hosts the YouTube iframe — fills the WebView completely
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { background: #000; width: 100vw; height: 100vh; overflow: hidden; }
-          iframe {
-            position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%;
-            border: none;
-          }
-        </style>
-      </head>
-      <body>
-        <iframe
-          src="${embedUrl}"
-          allow="autoplay; fullscreen; encrypted-media"
-          allowfullscreen
-        ></iframe>
-      </body>
-    </html>
-  `;
+  const handleClose = () => {
+    setLoading(true);
+    setError(false);
+    onClose();
+  };
 
   return (
     <Modal
       visible={visible}
-      animationType="fade"
+      animationType="slide"
       statusBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <StatusBar hidden />
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-            <Image source={icons.arrow} style={styles.closeIcon} tintColor="#fff" />
+      <View style={S.root}>
+
+        {/* ── Header ── */}
+        <View style={S.header}>
+          <TouchableOpacity onPress={handleClose} style={S.closeBtn}>
+            <Image
+              source={icons.arrow}
+              style={S.closeIcon}
+              tintColor="#fff"
+            />
           </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerLabel}>TRAILER</Text>
-            <Text style={styles.headerTitle} numberOfLines={1}>{movieTitle}</Text>
+          <View style={S.headerCenter}>
+            <Text style={S.headerLabel}>▶ TRAILER</Text>
+            <Text style={S.headerTitle} numberOfLines={1}>{movieTitle}</Text>
           </View>
-          <View style={{ width: 40 }} />
+          {/* External link fallback */}
+          <TouchableOpacity onPress={handleOpenExternal} style={S.externalBtn}>
+            <Text style={S.externalText}>↗</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Player */}
-        <View style={styles.playerWrapper}>
-          {loading && (
-            <View style={styles.loader}>
+        {/* ── Player ── */}
+        <View style={S.playerWrapper}>
+          {loading && !error && (
+            <View style={S.loader}>
               <ActivityIndicator size="large" color="#D4AF37" />
-              <Text style={styles.loaderText}>Loading trailer...</Text>
+              <Text style={S.loaderText}>Loading trailer...</Text>
             </View>
           )}
-          <WebView
-            source={{ html }}
-            style={styles.webview}
-            javaScriptEnabled
-            allowsFullscreenVideo
-            mediaPlaybackRequiresUserAction={false}
-            onLoadEnd={() => setLoading(false)}
-            onError={() => setLoading(false)}
-            scrollEnabled={false}
-            bounces={false}
-          />
+
+          {error ? (
+            /* Error state with fallback button */
+            <View style={S.errorState}>
+              <Text style={S.errorIcon}>🎬</Text>
+              <Text style={S.errorTitle}>Couldn't load in-app</Text>
+              <Text style={S.errorSub}>
+                YouTube is blocking playback here.{"\n"}Open it in the YouTube app instead.
+              </Text>
+              <TouchableOpacity style={S.youtubeBtn} onPress={handleOpenExternal}>
+                <Text style={S.youtubeBtnText}>▶  Open in YouTube</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={S.closeAltBtn} onPress={handleClose}>
+                <Text style={S.closeAltText}>← Go back</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <WebView
+              source={{ uri: getYouTubeUrl(videoKey) }}
+              style={S.webview}
+              userAgent={DESKTOP_UA}
+              javaScriptEnabled
+              domStorageEnabled
+              allowsFullscreenVideo
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              onLoadEnd={() => setLoading(false)}
+              onError={() => { setLoading(false); setError(true); }}
+              onHttpError={(e) => {
+                // HTTP errors like 4xx/5xx — show fallback
+                if (e.nativeEvent.statusCode >= 400) {
+                  setLoading(false);
+                  setError(true);
+                }
+              }}
+              // Inject JS to auto-click the play button if present
+              injectedJavaScript={`
+                setTimeout(() => {
+                  const btn = document.querySelector('.play-btn, button[aria-label*="Play"], .ytp-play-button');
+                  if (btn) btn.click();
+                }, 1500);
+                true;
+              `}
+            />
+          )}
         </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerNote}>🎬 Elite Movies · Official Trailer</Text>
+        {/* ── Footer ── */}
+        <View style={S.footer}>
+          <Text style={S.footerNote}>🎬 Elite Movies · Official Trailer</Text>
+          {!error && (
+            <TouchableOpacity onPress={handleOpenExternal}>
+              <Text style={S.openExternal}>Open in YouTube app ↗</Text>
+            </TouchableOpacity>
+          )}
         </View>
+
       </View>
     </Modal>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
+const GOLD = "#D4AF37";
+
+const S = StyleSheet.create({
+  root: { flex: 1, backgroundColor: "#000" },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 48,
-    paddingBottom: 12,
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingTop: 50, paddingBottom: 14,
     backgroundColor: "#000",
+    borderBottomWidth: 1, borderBottomColor: "#1a1a1a",
   },
   closeBtn: {
-    width: 40, height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.1)",
     justifyContent: "center", alignItems: "center",
   },
   closeIcon: { width: 18, height: 18, transform: [{ rotate: "180deg" }] },
   headerCenter: { flex: 1, alignItems: "center" },
-  headerLabel: { color: "#D4AF37", fontSize: 10, fontWeight: "700", letterSpacing: 2, marginBottom: 2 },
+  headerLabel: { color: GOLD, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 2 },
   headerTitle: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  externalBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: "rgba(212,175,55,0.15)",
+    justifyContent: "center", alignItems: "center",
+  },
+  externalText: { color: GOLD, fontSize: 18, fontWeight: "700" },
   playerWrapper: {
-    width: width,
-    height: width * (9 / 16),
+    flex: 1,
     backgroundColor: "#000",
   },
   loader: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#000",
-    zIndex: 10,
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: "center", alignItems: "center",
+    backgroundColor: "#000", zIndex: 10,
   },
-  loaderText: { color: "#D4AF37", marginTop: 12, fontSize: 13 },
+  loaderText: { color: GOLD, marginTop: 12, fontSize: 13 },
   webview: { flex: 1, backgroundColor: "#000" },
-  footer: {
-    flex: 1,
-    backgroundColor: "#0a0a0a",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    paddingBottom: 40,
+  errorState: {
+    flex: 1, justifyContent: "center", alignItems: "center",
+    paddingHorizontal: 32, backgroundColor: "#0a0a0a",
   },
-  footerNote: { color: "#444", fontSize: 12 },
+  errorIcon: { fontSize: 56, marginBottom: 16 },
+  errorTitle: { color: "#fff", fontSize: 20, fontWeight: "700", marginBottom: 8, textAlign: "center" },
+  errorSub: { color: "#888", fontSize: 14, textAlign: "center", lineHeight: 22, marginBottom: 28 },
+  youtubeBtn: {
+    backgroundColor: "#FF0000", borderRadius: 12,
+    paddingHorizontal: 28, paddingVertical: 14, marginBottom: 14,
+  },
+  youtubeBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  closeAltBtn: { paddingVertical: 8 },
+  closeAltText: { color: "#666", fontSize: 14 },
+  footer: {
+    backgroundColor: "#000", paddingVertical: 16,
+    alignItems: "center", gap: 6,
+    borderTopWidth: 1, borderTopColor: "#1a1a1a",
+  },
+  footerNote: { color: "#333", fontSize: 11 },
+  openExternal: { color: GOLD, fontSize: 12, fontWeight: "600" },
 });
 
 export default TrailerPlayer;

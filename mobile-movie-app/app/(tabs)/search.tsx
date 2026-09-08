@@ -36,8 +36,11 @@ const Search = () => {
     const [sortBy, setSortBy] = useState<SortOption>("popularity");
     const [showFilters, setShowFilters] = useState(false);
 
-    const { data: movies = [], loading, error, refetch: loadMovies, reset } =
+    const { data: moviesRaw, loading, error, refetch: loadMovies, reset } =
         useFetch(() => fetchMovies({ query: searchQuery }), false);
+
+    // Guard against null — useFetch initialises to null not []
+    const movies: Movie[] = (moviesRaw as Movie[]) || [];
 
     useEffect(() => {
         const t = setTimeout(async () => {
@@ -48,11 +51,11 @@ const Search = () => {
     }, [searchQuery]);
 
     useEffect(() => {
-        if (movies?.length > 0 && searchQuery.trim())
+        if (movies.length > 0 && searchQuery.trim())
             updateSearchCount(searchQuery, movies[0]);
     }, [movies]);
 
-    const filtered = (movies as Movie[]).filter(m =>
+    const filtered = movies.filter(m =>
         selectedGenre ? m.genre_ids?.includes(selectedGenre) : true
     );
 
