@@ -6,9 +6,9 @@
 
 // ── Database (get these from cPanel → MySQL Databases) ──────────────
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'YOUR_CPANEL_USERNAME_elite_movies');  // e.g. owenoz_elite_movies
-define('DB_USER', 'YOUR_CPANEL_USERNAME_elite_user');    // e.g. owenoz_elite_user
-define('DB_PASS', 'YOUR_DATABASE_PASSWORD');             // password you set for the DB user
+define('DB_NAME', 'ochira_elite_movies');
+define('DB_USER', 'ochira_maki');
+define('DB_PASS', 'Owenoz123.');
 
 // ── Your domain ─────────────────────────────────────────────────────
 define('APP_DOMAIN', 'https://hostherb.com');
