@@ -7,7 +7,7 @@
 
 const BASE_URL = (
   process.env.EXPO_PUBLIC_API_URL ||
-  "https://hostherb.com/api"
+  "https://bonny.tech/api"
 ).replace(/\/$/, ""); // strip trailing slash
 
 // Timeout for all API requests (ms)

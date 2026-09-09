@@ -10,7 +10,7 @@ define('DB_USER', 'ochira_maki');
 define('DB_PASS', 'Owenoz123.');
 
 // ── App ───────────────────────────────────────────────────────────────
-define('APP_DOMAIN', 'https://hostherb.com');
+define('APP_DOMAIN', 'https://bonny.tech');
 define('APP_NAME',   'Elite Movies');
 
 // ── Admin password (change this!) ────────────────────────────────────
@@ -26,5 +26,5 @@ define('TMDB_API_KEY', 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI0NzJkOWQyMTczM2Q3YWMzMDV
 define('OTP_EXPIRY_MINUTES', 15);
 
 // ── Email sender ──────────────────────────────────────────────────────
-define('MAIL_FROM',      'noreply@hostherb.com');
+define('MAIL_FROM',      'noreply@bonny.tech');
 define('MAIL_FROM_NAME', 'Elite Movies');
