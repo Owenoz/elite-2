@@ -1,25 +1,30 @@
 <?php
 // ═══════════════════════════════════════════════════════════════════
-// ELITE MOVIES API — Configuration
-// Fill in YOUR cPanel credentials below before uploading this file.
+// ELITE MOVIES — Server Configuration
 // ═══════════════════════════════════════════════════════════════════
 
-// ── Database (get these from cPanel → MySQL Databases) ──────────────
+// ── Database ─────────────────────────────────────────────────────────
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'ochira_elite_movies');
 define('DB_USER', 'ochira_maki');
 define('DB_PASS', 'Owenoz123.');
 
-// ── Your domain ─────────────────────────────────────────────────────
+// ── App ───────────────────────────────────────────────────────────────
 define('APP_DOMAIN', 'https://hostherb.com');
 define('APP_NAME',   'Elite Movies');
 
-// ── Security (change this to any random string) ─────────────────────
-define('SECRET_KEY', 'change_this_to_something_random_and_long_2024');
+// ── Admin password (change this!) ────────────────────────────────────
+define('ADMIN_PASSWORD', 'EliteAdmin2024!');
 
-// ── OTP expiry in minutes ────────────────────────────────────────────
+// ── API security key ─────────────────────────────────────────────────
+define('SECRET_KEY', 'elite_movies_ochira_secret_2024_!@#');
+
+// ── TMDB API key (same as in the mobile app) ──────────────────────────
+define('TMDB_API_KEY', 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI0NzJkOWQyMTczM2Q3YWMzMDVkOWI2NGIwMTNmYjkwZiIsIm5iZiI6MTc1MTkwNDI1OS4yMzMsInN1YiI6IjY4NmJmMDAzZTkwOTFiMjlkYTlhNDFmNSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.3yujtwat5S53QuiMkaHfFrj6gJZSvUKPu5S_qZp_dnA');
+
+// ── OTP expiry (minutes) ──────────────────────────────────────────────
 define('OTP_EXPIRY_MINUTES', 15);
 
-// ── Email sender (cPanel supports PHP mail() by default) ─────────────
+// ── Email sender ──────────────────────────────────────────────────────
 define('MAIL_FROM',      'noreply@hostherb.com');
 define('MAIL_FROM_NAME', 'Elite Movies');
