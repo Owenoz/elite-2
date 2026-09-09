@@ -1,22 +1,25 @@
 <?php
-// ─── Elite Movies API Configuration ─────────────────────────────────────────
-// Replace these values with your actual cPanel database credentials
+// ═══════════════════════════════════════════════════════════════════
+// ELITE MOVIES API — Configuration
+// Fill in YOUR cPanel credentials below before uploading this file.
+// ═══════════════════════════════════════════════════════════════════
 
+// ── Database (get these from cPanel → MySQL Databases) ──────────────
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'YOUR_CPANEL_USERNAME_elite_movies'); // e.g. owenoz_elite_movies
-define('DB_USER', 'YOUR_CPANEL_USERNAME_elite_user');   // e.g. owenoz_elite_user
-define('DB_PASS', 'YOUR_DATABASE_PASSWORD');
+define('DB_NAME', 'YOUR_CPANEL_USERNAME_elite_movies');  // e.g. owenoz_elite_movies
+define('DB_USER', 'YOUR_CPANEL_USERNAME_elite_user');    // e.g. owenoz_elite_user
+define('DB_PASS', 'YOUR_DATABASE_PASSWORD');             // password you set for the DB user
 
-// Your domain — used for CORS and email links
+// ── Your domain ─────────────────────────────────────────────────────
 define('APP_DOMAIN', 'https://hostherb.com');
-define('APP_NAME', 'Elite Movies');
+define('APP_NAME',   'Elite Movies');
 
-// Secret key for signing OTPs (change this to something random)
-define('SECRET_KEY', 'elite_movies_secret_key_change_this_2024');
+// ── Security (change this to any random string) ─────────────────────
+define('SECRET_KEY', 'change_this_to_something_random_and_long_2024');
 
-// OTP expiry in minutes
+// ── OTP expiry in minutes ────────────────────────────────────────────
 define('OTP_EXPIRY_MINUTES', 15);
 
-// ─── Email config (cPanel usually supports PHP mail() by default) ─────────────
-define('MAIL_FROM', 'noreply@hostherb.com');
+// ── Email sender (cPanel supports PHP mail() by default) ─────────────
+define('MAIL_FROM',      'noreply@hostherb.com');
 define('MAIL_FROM_NAME', 'Elite Movies');

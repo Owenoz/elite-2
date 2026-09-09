@@ -13,12 +13,11 @@ import { images } from "@/constants/images";
 import { icons } from "@/constants/icons";
 import FormField from "@/components/FormField";
 import CustomButton from "@/components/CustomButton";
-import { signIn } from "@/services/appwrite";
 import { useAuth } from "@/context/AuthContext";
 
 const Login = () => {
     const router = useRouter();
-    const { refreshUser } = useAuth();
+    const { setSessionEmail } = useAuth();
     const [form, setForm] = useState({
         email: "",
         password: "",
@@ -49,11 +48,10 @@ const Login = () => {
 
     const handleLogin = async () => {
         if (!validateForm()) return;
-
         setLoading(true);
         try {
-            await signIn(form.email, form.password);
-            await refreshUser();
+            // Save email as local session (no Appwrite, no server auth)
+            await setSessionEmail(form.email, form.email.split("@")[0]);
             router.replace("/(tabs)");
         } catch (error: any) {
             Alert.alert("Login Failed", error.message || "Invalid credentials");

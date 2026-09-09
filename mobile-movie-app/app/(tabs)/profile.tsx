@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "expo-router";
 import { useState, useEffect } from "react";
-import { getFavorites } from "@/services/appwrite";
+import { getFavorites } from "@/services/eliteApi";
 import { icons } from "@/constants/icons";
 
 const { width } = Dimensions.get("window");
@@ -22,7 +22,7 @@ const Profile = () => {
 
     useEffect(() => {
         if (user) {
-            getFavorites(user.$id).then(f => setSavedCount(f.length)).catch(() => {});
+            getFavorites(user.email).then(f => setSavedCount(f.length)).catch(() => {});
         }
     }, [user]);
 

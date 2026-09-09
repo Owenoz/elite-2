@@ -11,6 +11,7 @@ import {
   resendOtp,
   type PaymentVerifyResult,
 } from "@/services/eliteApi";
+import { useAuth } from "@/context/AuthContext";
 
 interface PaymentModalProps {
   visible: boolean;
@@ -28,6 +29,7 @@ const CARD = "#1C1B2E";
 const PaymentModal = ({
   visible, movieTitle, movieId, onClose, onPaymentSuccess,
 }: PaymentModalProps) => {
+  const { setSessionEmail } = useAuth();
   const [step, setStep] = useState<"payment" | "verify" | "success">("payment");
   const [email, setEmail]           = useState("");
   const [otp, setOtp]               = useState("");
@@ -101,6 +103,8 @@ const PaymentModal = ({
 
       setVerifyResult(result);
       setStep("success");
+      // Auto-login the user with their verified email
+      await setSessionEmail(email.toLowerCase());
       onPaymentSuccess(email.toLowerCase(), result);
     } catch (err: any) {
       setOtpError(err.message || "Verification failed. Check your code.");

@@ -14,10 +14,11 @@ import { images } from "@/constants/images";
 import { icons } from "@/constants/icons";
 import FormField from "@/components/FormField";
 import CustomButton from "@/components/CustomButton";
-import { registerUser } from "@/services/appwrite";
+import { useAuth } from "@/context/AuthContext";
 
 const Register = () => {
     const router = useRouter();
+    const { setSessionEmail } = useAuth();
     const [form, setForm] = useState({
         name: "",
         email: "",
@@ -73,15 +74,9 @@ const Register = () => {
 
         setLoading(true);
         try {
-            await registerUser(form.email, form.password, form.name);
-
-            if (Platform.OS === "web") {
-                router.replace("/(tabs)");
-            } else {
-                Alert.alert("Success", "Account created successfully!", [
-                    { text: "OK", onPress: () => router.replace("/(tabs)") },
-                ]);
-            }
+            // Save email + name as local session
+            await setSessionEmail(form.email, form.name);
+            router.replace("/(tabs)");
         } catch (error: any) {
             if (Platform.OS === "web") {
                 alert(error.message || "Failed to create account");

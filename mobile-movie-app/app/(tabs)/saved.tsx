@@ -1,51 +1,36 @@
 import {
-    View,
-    Text,
-    FlatList,
-    Image,
-    TouchableOpacity,
-    Alert,
+    View, Text, FlatList, Image,
+    TouchableOpacity, Alert, StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useState, useEffect } from "react";
-import { images } from "@/constants/images";
 import { icons } from "@/constants/icons";
+import { images } from "@/constants/images";
 import { useAuth } from "@/context/AuthContext";
-import { getFavorites, removeFromFavorites } from "@/services/appwrite";
+import { getFavorites, removeFavorite, type FavoriteMovie } from "@/services/eliteApi";
 import LoadingScreen from "@/components/LoadingScreen";
 import EmptyState from "@/components/EmptyState";
 import ErrorMessage from "@/components/ErrorMessage";
 
-interface FavoriteMovie {
-    $id: string;
-    movieId: number;
-    title: string;
-    posterUrl: string;
-    releaseDate: string;
-    voteAverage: number;
-}
+const GOLD = "#D4AF37";
+const BG   = "#09090F";
 
 const Saved = () => {
     const router = useRouter();
     const { user, isAuthenticated } = useAuth();
     const [favorites, setFavorites] = useState<FavoriteMovie[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading]     = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError]         = useState<string | null>(null);
 
     const loadFavorites = async () => {
-        if (!user) {
-            setLoading(false);
-            return;
-        }
-
+        if (!user) { setLoading(false); return; }
         try {
             setError(null);
-            const favs = await getFavorites(user.$id);
-            setFavorites(favs as unknown as FavoriteMovie[]);
-        } catch (error) {
-            console.error("Error loading favorites:", error);
+            const favs = await getFavorites(user.email);
+            setFavorites(favs);
+        } catch {
             setError("Failed to load saved movies");
         } finally {
             setLoading(false);
@@ -53,159 +38,122 @@ const Saved = () => {
         }
     };
 
-    useEffect(() => {
-        loadFavorites();
-    }, [user]);
+    useEffect(() => { loadFavorites(); }, [user]);
 
-    const handleRefresh = () => {
-        setRefreshing(true);
-        loadFavorites();
-    };
-
-    const handleRemoveFavorite = async (movieId: number, documentId: string) => {
+    const handleRemove = async (movieId: number, favId: number) => {
         if (!user) return;
-
         try {
-            await removeFromFavorites(user.$id, movieId);
-            setFavorites((prev) => prev.filter((fav) => fav.$id !== documentId));
-            Alert.alert("Success", "Removed from saved movies");
-        } catch (error) {
-            console.error("Error removing favorite:", error);
-            Alert.alert("Error", "Failed to remove from saved movies");
+            await removeFavorite(user.email, movieId);
+            setFavorites(prev => prev.filter(f => f.id !== favId));
+        } catch {
+            Alert.alert("Error", "Failed to remove saved movie");
         }
     };
 
     if (!isAuthenticated) {
         return (
-            <SafeAreaView className="bg-primary flex-1">
-                <Image
-                    source={images.bg}
-                    className="absolute w-full h-full"
-                    resizeMode="cover"
-                />
+            <View style={S.root}>
+                <Image source={images.bg} style={S.bgAbs} resizeMode="cover" />
                 <EmptyState
                     icon={icons.save}
-                    title="Login Required"
-                    message="Please login to save and view your favorite movies"
-                    actionLabel="Login"
-                    onAction={() => router.push("/login")}
+                    title="No session yet"
+                    message="Pay for a movie to start your saved collection. Your email becomes your account."
+                    actionLabel="Browse Movies"
+                    onAction={() => router.push("/(tabs)")}
                 />
-            </SafeAreaView>
+            </View>
         );
     }
 
-    if (loading) {
-        return <LoadingScreen />;
-    }
+    if (loading) return <LoadingScreen />;
 
     if (error) {
         return (
-            <SafeAreaView className="bg-primary flex-1">
-                <Image
-                    source={images.bg}
-                    className="absolute w-full h-full"
-                    resizeMode="cover"
-                />
-                <ErrorMessage
-                    message={error}
-                    onRetry={loadFavorites}
-                />
-            </SafeAreaView>
+            <View style={S.root}>
+                <Image source={images.bg} style={S.bgAbs} resizeMode="cover" />
+                <ErrorMessage message={error} onRetry={loadFavorites} />
+            </View>
         );
     }
 
     if (favorites.length === 0) {
         return (
-            <SafeAreaView className="bg-primary flex-1">
-                <Image
-                    source={images.bg}
-                    className="absolute w-full h-full"
-                    resizeMode="cover"
-                />
-                <View className="flex-1 px-5">
-                    <Text className="text-white text-2xl font-bold mt-10 mb-6">
-                        Saved Movies
-                    </Text>
+            <View style={S.root}>
+                <Image source={images.bg} style={S.bgAbs} resizeMode="cover" />
+                <View style={S.content}>
+                    <Text style={S.heading}>Saved Movies</Text>
                     <EmptyState
                         icon={icons.save}
-                        title="No Saved Movies Yet"
-                        message="Start exploring and save your favorite movies to watch later"
-                        actionLabel="Explore Movies"
+                        title="Nothing saved yet"
+                        message="Tap the bookmark icon on any movie to save it here."
+                        actionLabel="Browse Movies"
                         onAction={() => router.push("/(tabs)")}
                     />
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 
     return (
-        <SafeAreaView className="bg-primary flex-1">
-            <Image
-                source={images.bg}
-                className="absolute w-full h-full"
-                resizeMode="cover"
-            />
-            <View className="flex-1 px-5">
-                <Text className="text-white text-2xl font-bold mt-10 mb-6">
-                    Saved Movies ({favorites.length})
-                </Text>
-
-                <FlatList
-                    data={favorites}
-                    numColumns={3}
-                    keyExtractor={(item) => item.$id}
-                    showsVerticalScrollIndicator={false}
-                    refreshing={refreshing}
-                    onRefresh={handleRefresh}
-                    columnWrapperStyle={{
-                        justifyContent: "flex-start",
-                        gap: 20,
-                        paddingRight: 5,
-                        marginBottom: 10,
-                    }}
-                    renderItem={({ item }) => (
-                        <TouchableOpacity
-                            onPress={() => router.push(`/movies/${item.movieId}`)}
-                            className="w-[30%] relative"
-                        >
-                            <Image
-                                source={{ uri: item.posterUrl }}
-                                className="w-full h-52 rounded-lg"
-                                resizeMode="cover"
-                            />
-                            {/* Remove button */}
+        <View style={S.root}>
+            <Image source={images.bg} style={S.bgAbs} resizeMode="cover" />
+            <SafeAreaView style={{ flex: 1 }}>
+                <View style={S.content}>
+                    <Text style={S.heading}>Saved Movies ({favorites.length})</Text>
+                    <FlatList
+                        data={favorites}
+                        numColumns={3}
+                        keyExtractor={item => String(item.id)}
+                        showsVerticalScrollIndicator={false}
+                        refreshing={refreshing}
+                        onRefresh={() => { setRefreshing(true); loadFavorites(); }}
+                        columnWrapperStyle={S.row}
+                        contentContainerStyle={{ paddingBottom: 100 }}
+                        renderItem={({ item }) => (
                             <TouchableOpacity
-                                onPress={() => handleRemoveFavorite(item.movieId, item.$id)}
-                                className="absolute top-2 right-2 bg-dark-100/90 p-1.5 rounded-full"
+                                style={S.card}
+                                onPress={() => router.push(`/movies/${item.movie_id}`)}
+                                activeOpacity={0.88}
                             >
                                 <Image
-                                    source={icons.save}
-                                    className="size-4"
-                                    tintColor="#AB8BFF"
+                                    source={{ uri: item.poster_url }}
+                                    style={S.poster}
+                                    resizeMode="cover"
                                 />
+                                {/* Remove button */}
+                                <TouchableOpacity
+                                    style={S.removeBtn}
+                                    onPress={() => handleRemove(item.movie_id, item.id)}
+                                >
+                                    <Text style={S.removeTxt}>✕</Text>
+                                </TouchableOpacity>
+                                <Text style={S.title} numberOfLines={2}>{item.title}</Text>
+                                <Text style={S.year}>{item.release_year}</Text>
                             </TouchableOpacity>
-
-                            <Text className="text-sm font-bold text-white mt-2" numberOfLines={1}>
-                                {item.title}
-                            </Text>
-
-                            <View className="flex-row items-center justify-start gap-x-1">
-                                <Image source={icons.star} className="size-4" />
-                                <Text className="text-xs text-white font-bold uppercase">
-                                    {item.voteAverage?.toFixed(1)}
-                                </Text>
-                            </View>
-
-                            <Text className="text-xs text-light-300 font-medium mt-1">
-                                {item.releaseDate?.split("-")[0]}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
-                    contentContainerStyle={{ paddingBottom: 20 }}
-                />
-            </View>
-        </SafeAreaView>
+                        )}
+                    />
+                </View>
+            </SafeAreaView>
+        </View>
     );
 };
+
+const S = StyleSheet.create({
+    root:      { flex: 1, backgroundColor: BG },
+    bgAbs:     { position: "absolute", width: "100%", height: "100%", opacity: 0.18 },
+    content:   { flex: 1, paddingHorizontal: 16 },
+    heading:   { color: "#fff", fontSize: 22, fontWeight: "800", marginTop: 56, marginBottom: 16 },
+    row:       { justifyContent: "flex-start", gap: 10, marginBottom: 12 },
+    card:      { width: "30%" },
+    poster:    { width: "100%", height: 155, borderRadius: 12, marginBottom: 5 },
+    removeBtn: {
+        position: "absolute", top: 6, right: 6,
+        backgroundColor: "rgba(0,0,0,0.75)", borderRadius: 10,
+        paddingHorizontal: 5, paddingVertical: 2,
+    },
+    removeTxt: { color: "#fff", fontSize: 10, fontWeight: "700" },
+    title:     { color: "#E5E5E5", fontSize: 11, fontWeight: "600", lineHeight: 15 },
+    year:      { color: "#666", fontSize: 10, marginTop: 2 },
+});
 
 export default Saved;
