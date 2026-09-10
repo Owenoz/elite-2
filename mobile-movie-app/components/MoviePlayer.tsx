@@ -12,8 +12,9 @@ const { width, height } = Dimensions.get("window");
 const GOLD = "#D4AF37";
 
 interface MoviePlayerProps {
-  archiveIdentifier: string;   // Internet Archive item ID e.g. "TheGeneralBuster1926"
-  archiveUrl?: string;          // Direct MP4 URL (optional — fallback)
+  archiveIdentifier: string;
+  archiveUrl?: string;
+  localUri?: string;           // local file:// path — used first if available
   movieTitle: string;
   visible: boolean;
   onClose: () => void;
@@ -22,6 +23,7 @@ interface MoviePlayerProps {
 const MoviePlayer = ({
   archiveIdentifier,
   archiveUrl,
+  localUri,
   movieTitle,
   visible,
   onClose,
@@ -30,11 +32,13 @@ const MoviePlayer = ({
   const [error, setError] = useState(false);
   const [useDirectUrl, setUseDirectUrl] = useState(false);
 
-  // Primary: use Archive.org's own embed player (most reliable)
-  // Fallback: load direct MP4 URL in WebView
-  const embedUrl = getArchiveEmbedUrl(archiveIdentifier);
+  // Priority: local file → archive direct URL → archive embed
+  const isOffline = !!localUri;
+  const embedUrl  = localUri
+    ? null                                    // local file — use HTML5 player
+    : getArchiveEmbedUrl(archiveIdentifier);  // stream from archive.org
 
-  const playerHtml = useDirectUrl && archiveUrl ? `
+  const playerHtml = (useDirectUrl && archiveUrl) || localUri ? `
     <!DOCTYPE html>
     <html>
       <head>
@@ -42,28 +46,12 @@ const MoviePlayer = ({
         <style>
           * { margin:0; padding:0; box-sizing:border-box; }
           body { background:#000; width:100vw; height:100vh; overflow:hidden; display:flex; align-items:center; justify-content:center; }
-          video {
-            width:100%; height:100%;
-            object-fit:contain;
-            background:#000;
-          }
-          .controls {
-            position:absolute; bottom:0; left:0; right:0;
-            background:linear-gradient(transparent,rgba(0,0,0,0.9));
-            padding:16px;
-            display:flex; align-items:center; gap:12px;
-          }
-          button {
-            background:rgba(212,175,55,0.2); border:1px solid #D4AF37;
-            color:#D4AF37; border-radius:8px; padding:8px 16px;
-            font-size:14px; cursor:pointer;
-          }
+          video { width:100%; height:100%; object-fit:contain; background:#000; }
         </style>
       </head>
       <body>
         <video id="player" controls autoplay playsinline preload="metadata">
-          <source src="${archiveUrl}" type="video/mp4">
-          Your browser does not support video playback.
+          <source src="${localUri || archiveUrl}" type="video/mp4">
         </video>
       </body>
     </html>
@@ -145,9 +133,9 @@ const MoviePlayer = ({
           ) : (
             <WebView
               source={
-                useDirectUrl && playerHtml
+                playerHtml
                   ? { html: playerHtml }
-                  : { uri: embedUrl }
+                  : { uri: embedUrl! }
               }
               style={S.webview}
               javaScriptEnabled
@@ -171,11 +159,14 @@ const MoviePlayer = ({
         {/* Footer info */}
         <View style={S.footer}>
           <View style={S.footerRow}>
-            <Text style={S.footerBadge}>📼 Public Domain</Text>
+            {isOffline
+              ? <Text style={[S.footerBadge, { color: "#4ade80", borderColor: "rgba(22,163,74,0.3)" }]}>📱 Offline</Text>
+              : <Text style={S.footerBadge}>📼 Public Domain</Text>
+            }
             <Text style={S.footerBadge}>🆓 Free to Watch</Text>
             <Text style={S.footerBadge}>📦 Internet Archive</Text>
           </View>
-          <Text style={S.footerNote}>Elite Movies · Powered by Archive.org</Text>
+          <Text style={S.footerNote}>Elite Movies · {isOffline ? "Playing from local storage" : "Streaming from Archive.org"}</Text>
         </View>
 
       </View>

@@ -25,10 +25,16 @@ import {
     getMovieAccess,
     addFavorite,
     removeFavorite,
-    checkFavorite,
     type EliteMovie,
     type PaymentVerifyResult,
 } from "@/services/eliteApi";
+import {
+    downloadMovie,
+    deleteDownload,
+    isDownloadedLocally,
+    formatBytes,
+    type DownloadProgress,
+} from "@/services/downloadManager";
 import CastCard from "@/components/CastCard";
 import MovieCard from "@/components/MovieCard";
 import PaymentModal from "@/components/PaymentModal";
@@ -62,6 +68,8 @@ const Details = () => {
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const [archiveIdentifier, setArchiveIdentifier] = useState<string | null>(null);
     const [archiveUrl, setArchiveUrl] = useState<string | null>(null);
+    const [localVideoUri, setLocalVideoUri] = useState<string | null>(null);
+    const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
 
     const { data: movie, loading: movieLoading } = useFetch(() =>
         fetchMovieDetails(id as string)
@@ -83,14 +91,21 @@ const Details = () => {
         setUserEmail(null);
         setArchiveIdentifier(null);
         setArchiveUrl(null);
+        setLocalVideoUri(null);
+        setDownloadProgress(null);
 
         if (id) {
-            // Load Elite API movie data (archive info if in catalogue)
-            getMovieByTmdbId(Number(id)).then(em => {
+            getMovieByTmdbId(Number(id)).then(async em => {
                 if (em) {
                     setEliteMovie(em);
                     setArchiveIdentifier(em.archive_identifier);
                     setArchiveUrl(em.archive_url);
+                    // Check if already downloaded locally
+                    const localUri = await isDownloadedLocally(em.tmdb_id);
+                    if (localUri) {
+                        setLocalVideoUri(localUri);
+                        setIsDownloaded(true);
+                    }
                 }
             });
         }
@@ -134,18 +149,45 @@ const Details = () => {
     };
 
     // Called by PaymentModal after real OTP verification on the server
-    const handlePaymentSuccess = (email: string, result: PaymentVerifyResult) => {
+    const handlePaymentSuccess = async (email: string, result: PaymentVerifyResult) => {
         setPaymentVisible(false);
         setUserEmail(email);
 
-        // Use archive info returned from the server (most up to date)
+        const archiveId  = result.archive_identifier || archiveIdentifier;
+        const streamUrl  = result.archive_url || archiveUrl;
+
         if (result.archive_identifier) setArchiveIdentifier(result.archive_identifier);
         if (result.archive_url)        setArchiveUrl(result.archive_url);
 
         setIsDownloaded(true);
 
-        // Open the player immediately after payment confirmed
-        if (result.archive_identifier || archiveIdentifier) {
+        // ── Start offline download to local storage ──────────────────────────
+        if (streamUrl && archiveId && movie) {
+            const posterUrl = `https://image.tmdb.org/t/p/w342${movie.poster_path}`;
+            try {
+                const localUri = await downloadMovie(
+                    movie.id,
+                    movie.title,
+                    streamUrl,
+                    archiveId,
+                    posterUrl,
+                    (progress) => {
+                        setDownloadProgress(progress);
+                        if (progress.status === "completed") {
+                            setLocalVideoUri(progress.bytesDownloaded > 0 ? localUri : null);
+                        }
+                    }
+                );
+                setLocalVideoUri(localUri);
+                // Open player after download starts
+                setTimeout(() => setMoviePlayerVisible(true), 300);
+            } catch (err: any) {
+                // Download failed — still open streaming player
+                console.error("Offline download failed:", err.message);
+                setTimeout(() => setMoviePlayerVisible(true), 300);
+            }
+        } else if (archiveId) {
+            // No stream URL but archive id available — open streaming player
             setTimeout(() => setMoviePlayerVisible(true), 300);
         }
     };
@@ -248,17 +290,21 @@ const Details = () => {
                                 <Text style={[styles.actionBtnText, { color: "#000" }]}>Trailer</Text>
                             </TouchableOpacity>
                         )}
-                        {/* Watch Movie — shown when paid + archive available */}
+
+                        {/* Watch Movie — stream from archive.org */}
                         {isDownloaded && archiveIdentifier && (
                             <TouchableOpacity
                                 style={[styles.actionBtn, styles.watchBtn]}
                                 onPress={() => setMoviePlayerVisible(true)}
                             >
                                 <Image source={icons.play} style={[styles.iconSm, { marginRight: 8 }]} tintColor="#fff" />
-                                <Text style={styles.actionBtnText}>Watch Movie</Text>
+                                <Text style={styles.actionBtnText}>
+                                    {localVideoUri ? "Watch Offline" : "Watch Movie"}
+                                </Text>
                             </TouchableOpacity>
                         )}
-                        {/* Download / Access button — only when not yet paid */}
+
+                        {/* Download / Access button */}
                         {!isDownloaded && (
                             <TouchableOpacity
                                 onPress={handleDownload}
@@ -281,6 +327,30 @@ const Details = () => {
                             </TouchableOpacity>
                         )}
                     </View>
+
+                    {/* Download progress bar */}
+                    {downloadProgress && downloadProgress.status === "downloading" && (
+                        <View style={styles.progressWrap}>
+                            <View style={styles.progressBg}>
+                                <View style={[styles.progressFill,
+                                    { width: `${Math.round(downloadProgress.progress * 100)}%` as any }
+                                ]} />
+                            </View>
+                            <View style={styles.progressRow}>
+                                <Text style={styles.progressText}>
+                                    ⬇ Downloading offline copy…
+                                </Text>
+                                <Text style={styles.progressPct}>
+                                    {formatBytes(downloadProgress.bytesDownloaded)} / {formatBytes(downloadProgress.totalBytes)}
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+                    {downloadProgress?.status === "completed" && localVideoUri && (
+                        <View style={styles.offlineBadge}>
+                            <Text style={styles.offlineBadgeText}>✅ Saved offline · {formatBytes(downloadProgress.bytesDownloaded)}</Text>
+                        </View>
+                    )}
 
                     {/* Genres */}
                     {movie?.genres && movie.genres.length > 0 && (
@@ -385,12 +455,13 @@ const Details = () => {
                 onClose={() => setTrailerVisible(false)}
             />
 
-            {/* Full movie player — Internet Archive stream */}
+            {/* Full movie player — local file first, then archive stream */}
             {archiveIdentifier && (
                 <MoviePlayer
                     visible={moviePlayerVisible}
                     archiveIdentifier={archiveIdentifier}
                     archiveUrl={archiveUrl || undefined}
+                    localUri={localVideoUri || undefined}
                     movieTitle={movie?.title || ""}
                     onClose={() => setMoviePlayerVisible(false)}
                 />
@@ -447,6 +518,18 @@ const styles = StyleSheet.create({
     trailerBtn: { backgroundColor: "#D4AF37" },
     downloadBtn: { backgroundColor: COLORS.dark100 },
     watchBtn: { backgroundColor: "#1a5c1a" },
+    progressWrap: { marginTop: 10, marginBottom: 4 },
+    progressBg: { height: 6, backgroundColor: COLORS.dark100, borderRadius: 3, overflow: "hidden" },
+    progressFill: { height: "100%", backgroundColor: "#D4AF37", borderRadius: 3 },
+    progressRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 5 },
+    progressText: { color: COLORS.light200, fontSize: 11 },
+    progressPct: { color: "#D4AF37", fontSize: 11, fontWeight: "700" },
+    offlineBadge: {
+        backgroundColor: "rgba(22,163,74,0.12)", borderRadius: 8,
+        paddingHorizontal: 10, paddingVertical: 5, marginTop: 6,
+        alignSelf: "flex-start", borderWidth: 1, borderColor: "rgba(22,163,74,0.3)",
+    },
+    offlineBadgeText: { color: "#4ade80", fontSize: 11, fontWeight: "600" },
     disabledBtn: { opacity: 0.55 },
     actionBtnText: { color: COLORS.white, fontWeight: "600", fontSize: 14 },
     genreRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
