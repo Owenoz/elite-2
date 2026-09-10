@@ -25,8 +25,8 @@ define('TMDB_API_KEY', 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI0NzJkOWQyMTczM2Q3YWMzMDV
 // ── Archive.org S3 Upload Keys ────────────────────────────────────────
 // Get yours FREE at: https://archive.org/account/s3.php
 // Create a free account at archive.org first, then visit that URL
-define('ARCHIVE_ACCESS_KEY', 'YOUR_ACCESS_KEY');  // replace with real key
-define('ARCHIVE_SECRET_KEY', 'YOUR_SECRET_KEY');  // replace with real key
+define('ARCHIVE_ACCESS_KEY', 'w079UAJJqy2u9FLT');
+define('ARCHIVE_SECRET_KEY', 'ba9fZsDCpf8NhdjX');
 
 // ── OTP expiry (minutes) ──────────────────────────────────────────────
 define('OTP_EXPIRY_MINUTES', 15);
