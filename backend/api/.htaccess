@@ -1,27 +1,14 @@
 Options -Indexes
 RewriteEngine On
 
-# ── Cloudflare: tell it this is a JSON API, not a browser page ────────────────
-# This prevents the "Just a moment..." JS challenge from firing on API calls
-Header always set Cache-Control "no-store, no-cache, must-revalidate"
-Header always set X-Content-Type-Options "nosniff"
-Header always set X-Frame-Options "DENY"
-Header always set X-XSS-Protection "1; mode=block"
-Header always set Referrer-Policy "strict-origin-when-cross-origin"
-
-# ── CORS — allow mobile app from any origin ───────────────────────────────────
-Header always set Access-Control-Allow-Origin "*"
-Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Elite-App"
-
-# ── Handle preflight OPTIONS without PHP ─────────────────────────────────────
+# Handle preflight OPTIONS
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# ── Protect config and db files from direct browser access ───────────────────
+# Block config and db files from direct access
 RewriteRule ^(config|db)\.php$ - [F,L]
 
-# ── Clean URL routing: /api/movies → movies.php ──────────────────────────────
+# Clean URL routing: /api/movies → movies.php
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^([a-zA-Z_]+)/?$ $1.php [QSA,L]

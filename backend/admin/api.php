@@ -127,20 +127,22 @@ if ($action === 'archive_metadata') {
     $files = $data['files'] ?? [];
 
     // Filter video files only, pick best quality MP4
-    $videos = array_filter($files, fn($f) =>
-        isset($f['format']) && (
+    $videos = array_filter($files, function($f) {
+        return isset($f['format']) && (
             stripos($f['format'], 'mp4') !== false ||
             stripos($f['format'], 'mpeg4') !== false ||
             stripos($f['format'], 'h.264') !== false
-        )
-    );
+        );
+    });
 
-    $result = array_values(array_map(fn($f) => [
-        'name'   => $f['name'],
-        'format' => $f['format'],
-        'size'   => isset($f['size']) ? round($f['size'] / 1024 / 1024, 1) . ' MB' : 'unknown',
-        'url'    => "https://archive.org/download/$identifier/{$f['name']}",
-    ], $videos));
+    $result = array_values(array_map(function($f) use ($identifier) {
+        return [
+            'name'   => $f['name'],
+            'format' => $f['format'],
+            'size'   => isset($f['size']) ? round($f['size'] / 1024 / 1024, 1) . ' MB' : 'unknown',
+            'url'    => "https://archive.org/download/$identifier/{$f['name']}",
+        ];
+    }, $videos));
 
     // Auto-pick best file: prefer 512kb or medium quality
     $best = null;

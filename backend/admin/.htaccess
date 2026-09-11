@@ -1,31 +1,18 @@
 Options -Indexes
 
-# ── Allow large video uploads ─────────────────────────────────────────────────
-php_value upload_max_filesize 4096M
-php_value post_max_size       4096M
-php_value max_execution_time  7200
-php_value memory_limit        512M
-
-# ── Security: block direct access to PHP helpers ─────────────────────────────
+# Block direct access to auth and db helpers
 <FilesMatch "^(auth|db)\.php$">
     Order Allow,Deny
     Deny from all
 </FilesMatch>
 
-# ── Protect partials folder ───────────────────────────────────────────────────
+# Allow all other PHP files
 <FilesMatch "\.php$">
-    # Allow all PHP files to run (auth handled inside each file)
+    Order Allow,Deny
+    Allow from all
 </FilesMatch>
 
-# ── Security headers ──────────────────────────────────────────────────────────
-Header always set X-Frame-Options "SAMEORIGIN"
-Header always set X-Content-Type-Options "nosniff"
-Header always set X-XSS-Protection "1; mode=block"
-Header always set Referrer-Policy "same-origin"
-Header always set Cache-Control "no-store, no-cache, must-revalidate"
-
-# ── api.php: return JSON so Cloudflare doesn't challenge it ───────────────────
-<Files "api.php">
-    Header always set Content-Type "application/json; charset=UTF-8"
-    Header always set Access-Control-Allow-Origin "*"
-</Files>
+# Handle OPTIONS preflight
+RewriteEngine On
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=200,L]

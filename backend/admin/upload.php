@@ -57,15 +57,24 @@ if ($file['error'] !== UPLOAD_ERR_OK) {
     uploadErr($errors[$file['error']] ?? 'Upload error ' . $file['error']);
 }
 
-// Allow only video files
+// Allow only video files - use $_FILES mime type as fallback if finfo not available
 $allowed_types = ['video/mp4', 'video/mpeg', 'video/x-msvideo', 'video/quicktime',
-                  'video/x-matroska', 'video/webm', 'video/ogg'];
-$finfo = finfo_open(FILEINFO_MIME_TYPE);
-$mime  = finfo_file($finfo, $file['tmp_name']);
-finfo_close($finfo);
+                  'video/x-matroska', 'video/webm', 'video/ogg', 'application/octet-stream'];
 
-if (!in_array($mime, $allowed_types)) {
-    uploadErr("Invalid file type: $mime. Only video files allowed.");
+if (function_exists('finfo_open')) {
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime  = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+} else {
+    $mime = $file['type']; // fallback to browser-reported type
+}
+
+// Also accept by extension if mime check is uncertain
+$allowed_exts = ['mp4', 'mpeg', 'mpg', 'avi', 'mov', 'mkv', 'webm', 'ogv', 'flv', 'm4v'];
+$ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+
+if (!in_array($mime, $allowed_types) && !in_array($ext, $allowed_exts)) {
+    uploadErr("Invalid file type: $mime (.$ext). Only video files allowed.");
 }
 
 $max_size = 4 * 1024 * 1024 * 1024; // 4 GB
