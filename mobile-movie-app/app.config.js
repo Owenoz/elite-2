@@ -63,7 +63,7 @@ export default {
       EXPO_PUBLIC_APPWRITE_DOWNLOADS_COLLECTION_ID: process.env.EXPO_PUBLIC_APPWRITE_DOWNLOADS_COLLECTION_ID || "686c3f81001fba212c10",
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL || "https://YOUR_PROJECT.supabase.co",
       EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "YOUR_ANON_KEY",
-      EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL || "https://bonny.tech/api",
+      EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL || "https://elitemovies.duckdns.org/api",
     },
   },
 };

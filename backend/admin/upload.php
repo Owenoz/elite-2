@@ -3,16 +3,18 @@
  * Elite Movies — Archive.org Upload Handler
  *
  * Flow:
- *   1. Admin selects a video file in add-movie.php
- *   2. This script receives it via multipart POST
- *   3. Streams the file directly to archive.org using their S3-like API
- *   4. Returns the identifier + stream URL back to the admin JS
- *   5. Admin JS auto-fills the archive fields and saves to DB
- *
- * Requires: archive.org account with S3 keys set in config.php
- *   ARCHIVE_ACCESS_KEY  → from https://archive.org/account/s3.php
- *   ARCHIVE_SECRET_KEY  → from https://archive.org/account/s3.php
+ *   1. Admin selects video from local storage on add-movie.php
+ *   2. File uploads here via XHR (chunked with progress)
+ *   3. Script streams it to archive.org S3 API
+ *   4. Returns identifier + stream URL to admin JS
+ *   5. Admin JS auto-saves to DB → movie appears in app instantly
  */
+
+// Allow large uploads
+@ini_set('upload_max_filesize', '4096M');
+@ini_set('post_max_size',       '4096M');
+@ini_set('max_execution_time',  '7200');
+@ini_set('memory_limit',        '512M');
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../api/db.php';
@@ -144,13 +146,66 @@ $embed_url   = "https://archive.org/embed/{$identifier}";
 $details_url = "https://archive.org/details/{$identifier}";
 $duration    = time() - $upload_start;
 
+// ── Auto-save to DB if tmdb_id was provided ───────────────────────────────────
+$movie_saved = false;
+if ($tmdb_id) {
+    try {
+        $db = getDB();
+
+        // Fetch TMDB metadata to auto-fill movie details
+        $tmdb_api_key = defined('TMDB_API_KEY') ? TMDB_API_KEY : '';
+        $tmdb_data = null;
+        if ($tmdb_api_key) {
+            $ctx = stream_context_create(['http' => [
+                'method'  => 'GET',
+                'header'  => "Authorization: Bearer $tmdb_api_key\r\nAccept: application/json",
+                'timeout' => 10,
+            ]]);
+            $raw = @file_get_contents("https://api.themoviedb.org/3/movie/$tmdb_id", false, $ctx);
+            if ($raw) $tmdb_data = json_decode($raw, true);
+        }
+
+        $stmt = $db->prepare("
+            INSERT INTO movies (tmdb_id, title, overview, poster_path, backdrop_path,
+                release_year, vote_average, runtime, archive_identifier, archive_url, is_available)
+            VALUES (:tmdb_id,:title,:overview,:poster_path,:backdrop_path,
+                :release_year,:vote_average,:runtime,:archive_identifier,:archive_url,1)
+            ON DUPLICATE KEY UPDATE
+                archive_identifier=VALUES(archive_identifier),
+                archive_url=VALUES(archive_url),
+                is_available=1,
+                title=IF(title='',VALUES(title),title)
+        ");
+        $stmt->execute([
+            ':tmdb_id'            => (int)$tmdb_id,
+            ':title'              => $tmdb_data['title']         ?? $title,
+            ':overview'           => $tmdb_data['overview']      ?? '',
+            ':poster_path'        => $tmdb_data['poster_path']   ?? '',
+            ':backdrop_path'      => $tmdb_data['backdrop_path'] ?? '',
+            ':release_year'       => isset($tmdb_data['release_date'])
+                                      ? (int)substr($tmdb_data['release_date'], 0, 4)
+                                      : (int)$year,
+            ':vote_average'       => (float)($tmdb_data['vote_average'] ?? 0),
+            ':runtime'            => (int)($tmdb_data['runtime'] ?? 0),
+            ':archive_identifier' => $identifier,
+            ':archive_url'        => $stream_url,
+        ]);
+        $movie_saved = true;
+    } catch (\Exception $e) {
+        // Non-fatal — upload succeeded, DB save can be done manually
+        error_log("Elite Movies DB save after upload failed: " . $e->getMessage());
+    }
+}
+
 uploadOk([
-    'identifier'  => $identifier,
-    'stream_url'  => $stream_url,
-    'embed_url'   => $embed_url,
-    'details_url' => $details_url,
-    'filename'    => $filename,
-    'size_mb'     => round($file['size'] / 1024 / 1024, 1),
-    'duration_s'  => $duration,
-    'message'     => "✅ Uploaded to archive.org in {$duration}s. Processing may take a few minutes.",
+    'identifier'   => $identifier,
+    'stream_url'   => $stream_url,
+    'embed_url'    => $embed_url,
+    'details_url'  => $details_url,
+    'filename'     => $filename,
+    'size_mb'      => round($file['size'] / 1024 / 1024, 1),
+    'duration_s'   => $duration,
+    'movie_saved'  => $movie_saved,
+    'message'      => "✅ Uploaded to archive.org in {$duration}s."
+        . ($movie_saved ? " Movie saved to database — live in app!" : " Save metadata manually."),
 ]);

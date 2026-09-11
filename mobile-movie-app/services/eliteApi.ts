@@ -1,14 +1,10 @@
 // ─── Elite Movies API Service ─────────────────────────────────────────────────
-// Talks to your PHP backend on hostherb.com
-
-// NOTE: If you uploaded the API files to public_html/api/, the URL is:
-// https://hostherb.com/api
-// If you used a subdomain like api.hostherb.com, update accordingly.
+// Backend: https://elitemovies.duckdns.org/api
 
 const BASE_URL = (
   process.env.EXPO_PUBLIC_API_URL ||
-  "https://bonny.tech/api"
-).replace(/\/$/, ""); // strip trailing slash
+  "https://elitemovies.duckdns.org/api"
+).replace(/\/$/, "");
 
 // Timeout for all API requests (ms)
 const API_TIMEOUT = 15000;

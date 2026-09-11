@@ -1,5 +1,11 @@
 Options -Indexes
 
+# ── Allow large video uploads ─────────────────────────────────────────────────
+php_value upload_max_filesize 4096M
+php_value post_max_size       4096M
+php_value max_execution_time  7200
+php_value memory_limit        512M
+
 # ── Security: block direct access to PHP helpers ─────────────────────────────
 <FilesMatch "^(auth|db)\.php$">
     Order Allow,Deny

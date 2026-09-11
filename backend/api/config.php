@@ -10,7 +10,7 @@ define('DB_USER', 'ochira_maki');
 define('DB_PASS', 'Owenoz123.');
 
 // ── App ───────────────────────────────────────────────────────────────
-define('APP_DOMAIN', 'http://169.58.21.221');
+define('APP_DOMAIN', 'https://elitemovies.duckdns.org');
 define('APP_NAME',   'Elite Movies');
 
 // ── Admin password (change this!) ────────────────────────────────────
@@ -32,5 +32,5 @@ define('ARCHIVE_SECRET_KEY', 'ba9fZsDCpf8NhdjX');
 define('OTP_EXPIRY_MINUTES', 15);
 
 // ── Email sender ──────────────────────────────────────────────────────
-define('MAIL_FROM',      'noreply@bonny.tech');
+define('MAIL_FROM',      'noreply@elitemovies.duckdns.org');
 define('MAIL_FROM_NAME', 'Elite Movies');

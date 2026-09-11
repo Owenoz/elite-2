@@ -357,14 +357,26 @@ function startUpload() {
                 msg.style.display = 'block';
                 msg.innerHTML = `
                     ✅ <strong>Uploaded to archive.org!</strong> ${d.size_mb} MB in ${d.duration_s}s<br>
-                    <span class="muted small">Identifier: <code>${d.identifier}</code></span><br>
-                    <a href="${d.details_url}" target="_blank" class="link small">View on archive.org ↗</a>
-                    <br><span class="muted small">Note: archive.org may take a few minutes to process the video.</span>
+                    ${d.movie_saved
+                        ? '<strong style="color:#4ade80">🎬 Movie auto-saved to database — now LIVE in the app!</strong><br>'
+                        : ''
+                    }
+                    <span class="muted small">Archive ID: <code>${d.identifier}</code></span>
+                    &nbsp;<a href="https://archive.org/details/${d.identifier}" target="_blank" class="link small">View on archive.org ↗</a>
+                    <br><span class="muted small">archive.org takes ~5 min to process. Movie streams once processing is done.</span>
                 `;
 
                 // Show save step
                 updateFinalPreview();
                 document.getElementById('step4').style.display = 'block';
+
+                if (d.movie_saved) {
+                    const saveBtn = document.getElementById('saveBtn');
+                    saveBtn.innerHTML = '🎬 Movie is Live! View in Catalogue';
+                    saveBtn.style.background = '#16a34a';
+                    saveBtn.onclick = () => window.location.href = 'movies.php';
+                }
+
                 document.getElementById('step4').scrollIntoView({ behavior:'smooth', block:'start' });
 
             } else {

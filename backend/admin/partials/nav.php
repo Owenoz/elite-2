@@ -29,7 +29,7 @@ $links = [
     <div class="sidebar-footer">
         <a href="logout.php" class="nav-link nav-logout">🚪 Logout</a>
         <div class="sidebar-hint">
-            <a href="https://bonny.tech" target="_blank" class="link small">View App →</a>
+            <a href="https://elitemovies.duckdns.org" target="_blank" class="link small">View App →</a>
         </div>
     </div>
 </nav>
