@@ -1,82 +1,102 @@
 import { useState, useEffect } from "react";
 import {
     View, Text, ActivityIndicator, FlatList, Image,
-    TouchableOpacity, StyleSheet, TextInput, Dimensions,
+    TouchableOpacity, StyleSheet, TextInput,
 } from "react-native";
 import { images } from "@/constants/images";
 import { icons } from "@/constants/icons";
-import useFetch from "../../services/useFetch";
-import { fetchMovies } from "@/services/api";
-import MovieCard from "@/components/MovieCard";
-import { trackSearch } from "@/services/eliteApi";
 import { useRouter } from "expo-router";
+import { getAvailableMovies, searchCatalogue, type EliteMovie } from "@/services/eliteApi";
 
-const { width } = Dimensions.get("window");
+const GOLD = "#D4AF37";
+const BG   = "#09090F";
+const CARD = "#1C1B2E";
 
-const GENRES = [
-    { id: 28, name: "Action" }, { id: 35, name: "Comedy" },
-    { id: 18, name: "Drama" }, { id: 27, name: "Horror" },
-    { id: 10749, name: "Romance" }, { id: 878, name: "Sci-Fi" },
-    { id: 53, name: "Thriller" }, { id: 16, name: "Animation" },
-];
+// ── Movie card for search results ─────────────────────────────────────────────
+const SearchMovieCard = ({ movie }: { movie: EliteMovie }) => {
+    const router = useRouter();
+    const posterUrl = movie.poster_path
+        ? `https://image.tmdb.org/t/p/w342${movie.poster_path}`
+        : "https://placehold.co/342x513/1C1B2E/D4AF37.png";
 
-type SortOption = "popularity" | "rating" | "release_date" | "title";
+    return (
+        <TouchableOpacity
+            style={MC.card}
+            activeOpacity={0.85}
+            onPress={() => router.push(`/movies/${movie.tmdb_id}`)}
+        >
+            <View style={MC.posterWrap}>
+                <Image source={{ uri: posterUrl }} style={MC.poster} resizeMode="cover" />
+                <View style={MC.ratingBadge}>
+                    <Text style={MC.ratingText}>⭐ {movie.vote_average?.toFixed(1)}</Text>
+                </View>
+            </View>
+            <Text style={MC.title} numberOfLines={2}>{movie.title}</Text>
+            <Text style={MC.year}>{movie.release_year}</Text>
+        </TouchableOpacity>
+    );
+};
 
-const SORTS: { key: SortOption; label: string }[] = [
-    { key: "popularity", label: "🔥 Popular" },
-    { key: "rating", label: "⭐ Top Rated" },
-    { key: "release_date", label: "🆕 Newest" },
-    { key: "title", label: "🔤 A–Z" },
-];
+const MC = StyleSheet.create({
+    card: { width: "30%", marginBottom: 4 },
+    posterWrap: { position: "relative", borderRadius: 12, overflow: "hidden" },
+    poster: { width: "100%", height: 160, borderRadius: 12 },
+    ratingBadge: {
+        position: "absolute", top: 6, left: 6,
+        backgroundColor: "rgba(0,0,0,0.75)", paddingHorizontal: 6, paddingVertical: 2,
+        borderRadius: 8, borderWidth: 1, borderColor: "rgba(212,175,55,0.3)",
+    },
+    ratingText: { color: GOLD, fontSize: 9, fontWeight: "700" },
+    title: { color: "#E5E5E5", fontSize: 11, fontWeight: "600", marginTop: 6, lineHeight: 15 },
+    year: { color: "#555", fontSize: 10, marginTop: 2 },
+});
 
 const Search = () => {
-    const router = useRouter();
-    const [searchQuery, setSearchQuery] = useState("");
-    const [selectedGenre, setSelectedGenre] = useState<number | null>(null);
-    const [sortBy, setSortBy] = useState<SortOption>("popularity");
-    const [showFilters, setShowFilters] = useState(false);
+    const [searchQuery, setSearchQuery]   = useState("");
+    const [results, setResults]           = useState<EliteMovie[]>([]);
+    const [allMovies, setAllMovies]       = useState<EliteMovie[]>([]);
+    const [loading, setLoading]           = useState(false);
+    const [loadingAll, setLoadingAll]     = useState(true);
 
-    const { data: moviesRaw, loading, error, refetch: loadMovies, reset } =
-        useFetch(() => fetchMovies({ query: searchQuery }), false);
-
-    // Guard against null — useFetch initialises to null not []
-    const movies: Movie[] = (moviesRaw as Movie[]) || [];
-
+    // Load all movies on mount (shown when search is empty)
     useEffect(() => {
+        getAvailableMovies(1, 100).then(data => {
+            setAllMovies((data as EliteMovie[]) || []);
+            setLoadingAll(false);
+        }).catch(() => setLoadingAll(false));
+    }, []);
+
+    // Search your catalogue with debounce
+    useEffect(() => {
+        if (!searchQuery.trim()) {
+            setResults([]);
+            return;
+        }
         const t = setTimeout(async () => {
-            if (searchQuery.trim()) await loadMovies();
-            else reset();
-        }, 500);
+            setLoading(true);
+            try {
+                const data = await searchCatalogue(searchQuery.trim());
+                setResults((data as EliteMovie[]) || []);
+            } catch {
+                setResults([]);
+            } finally {
+                setLoading(false);
+            }
+        }, 400);
         return () => clearTimeout(t);
     }, [searchQuery]);
 
-    useEffect(() => {
-        if (movies.length > 0 && searchQuery.trim())
-            trackSearch(searchQuery, movies[0].id, movies[0].title,
-                movies[0].poster_path ? `https://image.tmdb.org/t/p/w342${movies[0].poster_path}` : "");
-    }, [movies]);
-
-    const filtered = movies.filter(m =>
-        selectedGenre ? m.genre_ids?.includes(selectedGenre) : true
-    );
-
-    const sorted = [...filtered].sort((a, b) => {
-        switch (sortBy) {
-            case "rating": return b.vote_average - a.vote_average;
-            case "release_date": return new Date(b.release_date).getTime() - new Date(a.release_date).getTime();
-            case "title": return a.title.localeCompare(b.title);
-            default: return b.popularity - a.popularity;
-        }
-    });
+    const displayMovies = searchQuery.trim() ? results : allMovies;
+    const isSearching   = searchQuery.trim().length > 0;
 
     return (
         <View style={S.root}>
             <Image source={images.bg} style={S.bgAbs} resizeMode="cover" />
 
             <FlatList
-                data={sorted}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => <MovieCard {...item} />}
+                data={displayMovies}
+                keyExtractor={(item) => `s_${item.id}`}
+                renderItem={({ item }) => <SearchMovieCard movie={item} />}
                 numColumns={3}
                 columnWrapperStyle={S.gridRow}
                 contentContainerStyle={S.gridContent}
@@ -87,17 +107,19 @@ const Search = () => {
                         <View style={S.header}>
                             <View style={S.titleRow}>
                                 <View style={S.goldBar} />
-                                <Text style={S.screenTitle}>Discover</Text>
+                                <Text style={S.screenTitle}>
+                                    {isSearching ? "Search Results" : "All Movies"}
+                                </Text>
                             </View>
                             <Image source={icons.logo} style={S.logo} resizeMode="contain" />
                         </View>
 
-                        {/* Search bar */}
+                        {/* Search box */}
                         <View style={S.searchBox}>
-                            <Image source={icons.search} style={S.searchIcon} tintColor="#D4AF37" />
+                            <Image source={icons.search} style={S.searchIcon} tintColor={GOLD} />
                             <TextInput
                                 style={S.searchInput}
-                                placeholder="Search movies, actors..."
+                                placeholder="Search your movies..."
                                 placeholderTextColor="#555"
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
@@ -105,98 +127,47 @@ const Search = () => {
                                 autoCorrect={false}
                             />
                             {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => { setSearchQuery(""); reset(); }}>
+                                <TouchableOpacity onPress={() => setSearchQuery("")}>
                                     <Text style={S.clearBtn}>✕</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
 
-                        {/* Filter toggle */}
-                        {searchQuery.trim().length > 0 && (
-                            <TouchableOpacity
-                                style={S.filterToggle}
-                                onPress={() => setShowFilters(p => !p)}
-                            >
-                                <Text style={S.filterToggleText}>⚙ Filters & Sort</Text>
-                                <Text style={S.filterArrow}>{showFilters ? "▲" : "▼"}</Text>
-                            </TouchableOpacity>
-                        )}
-
-                        {/* Filter panel */}
-                        {showFilters && searchQuery.trim().length > 0 && (
-                            <View style={S.filterPanel}>
-                                <Text style={S.filterLabel}>SORT BY</Text>
-                                <View style={S.sortRow}>
-                                    {SORTS.map(s => (
-                                        <TouchableOpacity
-                                            key={s.key}
-                                            style={[S.sortChip, sortBy === s.key && S.sortChipActive]}
-                                            onPress={() => setSortBy(s.key)}
-                                        >
-                                            <Text style={[S.sortChipText, sortBy === s.key && S.sortChipTextActive]}>
-                                                {s.label}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-
-                                <View style={S.filterLabelRow}>
-                                    <Text style={S.filterLabel}>GENRE</Text>
-                                    {selectedGenre && (
-                                        <TouchableOpacity onPress={() => setSelectedGenre(null)}>
-                                            <Text style={S.clearGenre}>Clear</Text>
-                                        </TouchableOpacity>
-                                    )}
-                                </View>
-                                <View style={S.genreGrid}>
-                                    {GENRES.map(g => (
-                                        <TouchableOpacity
-                                            key={g.id}
-                                            style={[S.genreChip, selectedGenre === g.id && S.genreChipActive]}
-                                            onPress={() => setSelectedGenre(selectedGenre === g.id ? null : g.id)}
-                                        >
-                                            <Text style={[S.genreChipText, selectedGenre === g.id && S.genreChipTextActive]}>
-                                                {g.name}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
-                        )}
-
-                        {/* Status row */}
-                        {loading && (
+                        {/* Status */}
+                        {(loading || loadingAll) && (
                             <View style={S.statusRow}>
-                                <ActivityIndicator color="#D4AF37" />
-                                <Text style={S.statusText}>Searching...</Text>
+                                <ActivityIndicator color={GOLD} size="small" />
+                                <Text style={S.statusText}>
+                                    {loadingAll ? "Loading movies..." : "Searching..."}
+                                </Text>
                             </View>
                         )}
-                        {error && <Text style={S.errorText}>Error: {error.message}</Text>}
-                        {!loading && !error && searchQuery.trim() && sorted.length > 0 && (
+
+                        {isSearching && !loading && displayMovies.length > 0 && (
                             <View style={S.resultsHeader}>
                                 <Text style={S.resultsTitle}>
                                     Results for <Text style={S.resultsQuery}>"{searchQuery}"</Text>
                                 </Text>
                                 <View style={S.countBadge}>
-                                    <Text style={S.countText}>{sorted.length}</Text>
+                                    <Text style={S.countText}>{displayMovies.length}</Text>
                                 </View>
                             </View>
                         )}
                     </View>
                 }
                 ListEmptyComponent={
-                    !loading && !error ? (
+                    !loading && !loadingAll ? (
                         <View style={S.emptyState}>
                             <Text style={S.emptyIcon}>
-                                {searchQuery.trim() ? "😕" : "🎬"}
+                                {isSearching ? "😕" : "🎬"}
                             </Text>
                             <Text style={S.emptyTitle}>
-                                {searchQuery.trim() ? "No results found" : "Search Elite Movies"}
+                                {isSearching ? "No movies found" : "No movies yet"}
                             </Text>
                             <Text style={S.emptySubtitle}>
-                                {searchQuery.trim()
-                                    ? selectedGenre ? "Try removing the genre filter" : "Try a different title or actor"
-                                    : "Find your next favourite film"}
+                                {isSearching
+                                    ? `No results for "${searchQuery}" in your catalogue`
+                                    : "Movies added by the admin will appear here"}
                             </Text>
                         </View>
                     ) : null
@@ -206,76 +177,30 @@ const Search = () => {
     );
 };
 
-const GOLD = "#D4AF37";
-const BG = "#09090F";
-const CARD = "#1C1B2E";
-
 const S = StyleSheet.create({
-    root: { flex: 1, backgroundColor: BG },
-    bgAbs: { position: "absolute", width: "100%", height: "100%", opacity: 0.12 },
-    header: {
-        flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-        paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16,
-    },
-    titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-    goldBar: { width: 3, height: 22, backgroundColor: GOLD, borderRadius: 2 },
-    screenTitle: { color: "#fff", fontSize: 26, fontWeight: "800" },
-    logo: { width: 32, height: 32 },
-    searchBox: {
-        flexDirection: "row", alignItems: "center",
-        backgroundColor: CARD, borderRadius: 14, borderWidth: 1, borderColor: "#2a2840",
-        marginHorizontal: 20, paddingHorizontal: 14, paddingVertical: 13, marginBottom: 12, gap: 10,
-    },
-    searchIcon: { width: 18, height: 18 },
-    searchInput: { flex: 1, color: "#fff", fontSize: 15 },
-    clearBtn: { color: "#666", fontSize: 16, paddingLeft: 6 },
-    filterToggle: {
-        flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-        marginHorizontal: 20, backgroundColor: CARD, borderRadius: 12,
-        paddingHorizontal: 16, paddingVertical: 11, marginBottom: 8,
-        borderWidth: 1, borderColor: "#2a2840",
-    },
-    filterToggleText: { color: "#A8B5DB", fontSize: 13, fontWeight: "600" },
-    filterArrow: { color: GOLD, fontSize: 11 },
-    filterPanel: {
-        marginHorizontal: 20, backgroundColor: "#12121A", borderRadius: 16,
-        padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "#2a2840",
-    },
-    filterLabel: { color: GOLD, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 10 },
-    filterLabelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 14, marginBottom: 10 },
-    clearGenre: { color: GOLD, fontSize: 12 },
-    sortRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    sortChip: {
-        paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,
-        backgroundColor: "#1C1B2E", borderWidth: 1, borderColor: "#2a2840",
-    },
-    sortChipActive: { backgroundColor: GOLD, borderColor: GOLD },
-    sortChipText: { color: "#A8B5DB", fontSize: 12, fontWeight: "600" },
-    sortChipTextActive: { color: "#000" },
-    genreGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    genreChip: {
-        paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
-        backgroundColor: "#1C1B2E", borderWidth: 1, borderColor: "#2a2840",
-    },
-    genreChipActive: { backgroundColor: GOLD, borderColor: GOLD },
-    genreChipText: { color: "#A8B5DB", fontSize: 12, fontWeight: "600" },
-    genreChipTextActive: { color: "#000" },
-    statusRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20, marginVertical: 10 },
-    statusText: { color: "#888", fontSize: 13 },
-    errorText: { color: "#EF4444", paddingHorizontal: 20, marginVertical: 8, fontSize: 13 },
-    resultsHeader: {
-        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-        paddingHorizontal: 20, marginBottom: 8,
-    },
-    resultsTitle: { color: "#A8B5DB", fontSize: 14 },
-    resultsQuery: { color: "#fff", fontWeight: "700" },
-    countBadge: { backgroundColor: GOLD, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
-    countText: { color: "#000", fontSize: 11, fontWeight: "800" },
-    gridRow: { justifyContent: "flex-start", gap: 12, marginBottom: 14 },
-    gridContent: { paddingHorizontal: 20, paddingBottom: 100 },
-    emptyState: { alignItems: "center", paddingTop: 60, paddingHorizontal: 40 },
-    emptyIcon: { fontSize: 52, marginBottom: 16 },
-    emptyTitle: { color: "#fff", fontSize: 18, fontWeight: "700", marginBottom: 8, textAlign: "center" },
+    root:          { flex: 1, backgroundColor: BG },
+    bgAbs:         { position: "absolute", width: "100%", height: "100%", opacity: 0.12 },
+    header:        { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16 },
+    titleRow:      { flexDirection: "row", alignItems: "center", gap: 8 },
+    goldBar:       { width: 3, height: 22, backgroundColor: GOLD, borderRadius: 2 },
+    screenTitle:   { color: "#fff", fontSize: 22, fontWeight: "800" },
+    logo:          { width: 32, height: 32 },
+    searchBox:     { flexDirection: "row", alignItems: "center", backgroundColor: CARD, borderRadius: 14, borderWidth: 1, borderColor: "#2a2840", marginHorizontal: 20, paddingHorizontal: 14, paddingVertical: 13, marginBottom: 12, gap: 10 },
+    searchIcon:    { width: 18, height: 18 },
+    searchInput:   { flex: 1, color: "#fff", fontSize: 15 },
+    clearBtn:      { color: "#666", fontSize: 16, paddingLeft: 6 },
+    statusRow:     { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20, marginVertical: 10 },
+    statusText:    { color: "#888", fontSize: 13 },
+    resultsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 },
+    resultsTitle:  { color: "#A8B5DB", fontSize: 14 },
+    resultsQuery:  { color: "#fff", fontWeight: "700" },
+    countBadge:    { backgroundColor: GOLD, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
+    countText:     { color: "#000", fontSize: 11, fontWeight: "800" },
+    gridRow:       { justifyContent: "flex-start", gap: 12, marginBottom: 14 },
+    gridContent:   { paddingHorizontal: 20, paddingBottom: 100 },
+    emptyState:    { alignItems: "center", paddingTop: 60, paddingHorizontal: 40 },
+    emptyIcon:     { fontSize: 52, marginBottom: 16 },
+    emptyTitle:    { color: "#fff", fontSize: 18, fontWeight: "700", marginBottom: 8, textAlign: "center" },
     emptySubtitle: { color: "#666", fontSize: 14, textAlign: "center", lineHeight: 20 },
 });
 

@@ -17,8 +17,6 @@ import useFetch from "../../services/useFetch";
 import {
     fetchMovieDetails,
     fetchMovieCredits,
-    fetchSimilarMovies,
-    fetchMovieVideos,
 } from "@/services/api";
 import {
     getMovieByTmdbId,
@@ -30,15 +28,12 @@ import {
 } from "@/services/eliteApi";
 import {
     downloadMovie,
-    deleteDownload,
     isDownloadedLocally,
     formatBytes,
     type DownloadProgress,
 } from "@/services/downloadManager";
 import CastCard from "@/components/CastCard";
-import MovieCard from "@/components/MovieCard";
 import PaymentModal from "@/components/PaymentModal";
-import TrailerPlayer from "@/components/TrailerPlayer";
 import MoviePlayer from "@/components/MoviePlayer";
 
 interface MovieInfoProps {
@@ -61,8 +56,7 @@ const Details = () => {
     const [favoriteLoading, setFavoriteLoading] = useState(false);
     const [downloadLoading, setDownloadLoading] = useState(false);
     const [paymentVisible, setPaymentVisible] = useState(false);
-    const [trailerVisible, setTrailerVisible] = useState(false);
-    // Elite API movie data (has archive identifier if movie is in our catalogue)
+    // Removed trailer state — no trailer, only full movie
     const [eliteMovie, setEliteMovie] = useState<EliteMovie | null>(null);
     const [moviePlayerVisible, setMoviePlayerVisible] = useState(false);
     const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -76,12 +70,6 @@ const Details = () => {
     );
     const { data: credits, loading: creditsLoading } = useFetch(() =>
         fetchMovieCredits(id as string)
-    );
-    const { data: similarMovies, loading: similarLoading } = useFetch(() =>
-        fetchSimilarMovies(id as string)
-    );
-    const { data: videos, loading: videosLoading } = useFetch(() =>
-        fetchMovieVideos(id as string)
     );
 
     useEffect(() => {
@@ -193,21 +181,12 @@ const Details = () => {
     };
 
     const handlePlayTrailer = () => {
-        if (!videos || videos.length === 0) {
-            Alert.alert("No Trailer", "No trailer available for this movie");
-            return;
-        }
-        const trailer = videos.find((v: any) => v.type === "Trailer" || v.type === "Teaser");
-        if (!trailer) {
-            Alert.alert("No Trailer", "No trailer available for this movie");
-            return;
-        }
-        setTrailerVisible(true);
+        // Trailer removed — show full movie only
     };
 
-    const trailerKey = videos?.find((v: any) => v.type === "Trailer" || v.type === "Teaser")?.key || "";
+    const trailerKey = "";
 
-    const loading = movieLoading || creditsLoading || similarLoading || videosLoading;
+    const loading = movieLoading || creditsLoading;
 
     if (loading && !movie) {
         return (
@@ -281,51 +260,57 @@ const Details = () => {
 
                     {/* Action Buttons */}
                     <View style={styles.actionRow}>
-                        {videos && videos.length > 0 && (
-                            <TouchableOpacity
-                                onPress={handlePlayTrailer}
-                                style={[styles.actionBtn, styles.trailerBtn]}
-                            >
-                                <Image source={icons.play} style={[styles.iconSm, { marginRight: 8 }]} tintColor="#000" />
-                                <Text style={[styles.actionBtnText, { color: "#000" }]}>Trailer</Text>
-                            </TouchableOpacity>
-                        )}
-
-                        {/* Watch Movie — stream from archive.org */}
-                        {isDownloaded && archiveIdentifier && (
+                        {/* Watch Movie — primary action, always shown for catalogue movies */}
+                        {isDownloaded && archiveIdentifier ? (
+                            /* Already paid — watch immediately */
                             <TouchableOpacity
                                 style={[styles.actionBtn, styles.watchBtn]}
                                 onPress={() => setMoviePlayerVisible(true)}
                             >
                                 <Image source={icons.play} style={[styles.iconSm, { marginRight: 8 }]} tintColor="#fff" />
                                 <Text style={styles.actionBtnText}>
-                                    {localVideoUri ? "Watch Offline" : "Watch Movie"}
+                                    {localVideoUri ? "▶ Watch Offline" : "▶ Watch Movie"}
                                 </Text>
                             </TouchableOpacity>
-                        )}
-
-                        {/* Download / Access button */}
-                        {!isDownloaded && (
+                        ) : archiveIdentifier ? (
+                            /* Not paid yet — show pay to watch */
                             <TouchableOpacity
                                 onPress={handleDownload}
                                 disabled={downloadLoading}
-                                style={[styles.actionBtn, styles.downloadBtn, downloadLoading && styles.disabledBtn]}
+                                style={[styles.actionBtn, styles.trailerBtn, downloadLoading && styles.disabledBtn]}
                             >
                                 {downloadLoading ? (
-                                    <ActivityIndicator color="#D4AF37" />
+                                    <ActivityIndicator color="#000" />
                                 ) : (
                                     <>
-                                        <Image source={icons.arrow}
-                                            style={[styles.iconSm, { marginRight: 8, transform: [{ rotate: "90deg" }] }]}
-                                            tintColor="#fff"
-                                        />
-                                        <Text style={styles.actionBtnText}>
-                                            {archiveIdentifier ? "Watch · 5,000 UGX" : "Download · 5,000 UGX"}
+                                        <Image source={icons.play} style={[styles.iconSm, { marginRight: 8 }]} tintColor="#000" />
+                                        <Text style={[styles.actionBtnText, { color: "#000" }]}>
+                                            Watch · 5,000 UGX
                                         </Text>
                                     </>
                                 )}
                             </TouchableOpacity>
+                        ) : (
+                            /* Movie not in catalogue */
+                            <View style={[styles.actionBtn, styles.downloadBtn]}>
+                                <Text style={[styles.actionBtnText, { color: "#666" }]}>
+                                    Not available yet
+                                </Text>
+                            </View>
                         )}
+
+                        {/* Bookmark button */}
+                        <TouchableOpacity
+                            onPress={handleFavoriteToggle}
+                            disabled={favoriteLoading}
+                            style={[styles.actionBtn, styles.downloadBtn, { flex: 0, paddingHorizontal: 16 }]}
+                        >
+                            <Image
+                                source={icons.save}
+                                style={styles.iconSm}
+                                tintColor={isFavorite ? "#D4AF37" : "#fff"}
+                            />
+                        </TouchableOpacity>
                     </View>
 
                     {/* Download progress bar */}
@@ -387,44 +372,15 @@ const Details = () => {
 
                     {/* Production Info row */}
                     <View style={styles.productionRow}>
-                        <MovieInfo
-                            label="Budget"
-                            value={movie?.budget ? `$${(movie.budget / 1_000_000).toFixed(1)}M` : "N/A"}
-                        />
-                        <MovieInfo
-                            label="Revenue"
-                            value={movie?.revenue ? `$${(movie.revenue / 1_000_000).toFixed(1)}M` : "N/A"}
-                        />
-                        <MovieInfo
-                            label="Language"
-                            value={movie?.original_language?.toUpperCase()}
-                        />
+                        <MovieInfo label="Runtime" value={movie?.runtime ? `${movie.runtime} min` : "N/A"} />
+                        <MovieInfo label="Language" value={movie?.original_language?.toUpperCase()} />
+                        <MovieInfo label="Year" value={eliteMovie?.release_year?.toString()} />
                     </View>
 
                     <MovieInfo
                         label="Production Companies"
-                        value={
-                            movie?.production_companies?.map((c: any) => c.name).join(" • ") || "N/A"
-                        }
+                        value={movie?.production_companies?.map((c: any) => c.name).join(" • ") || "N/A"}
                     />
-
-                    {/* Similar Movies */}
-                    {similarMovies && similarMovies.length > 0 && (
-                        <View style={[styles.section, { marginTop: 28 }]}>
-                            <Text style={styles.sectionTitle}>Similar Movies</Text>
-                            <FlatList
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                data={similarMovies.slice(0, 10)}
-                                renderItem={({ item }) => (
-                                    <View style={styles.similarCard}>
-                                        <MovieCard {...item} />
-                                    </View>
-                                )}
-                                keyExtractor={(item) => item.id.toString()}
-                            />
-                        </View>
-                    )}
                 </View>
             </ScrollView>
 
@@ -446,13 +402,6 @@ const Details = () => {
                 movieId={movie?.id || 0}
                 onClose={() => setPaymentVisible(false)}
                 onPaymentSuccess={handlePaymentSuccess}
-            />
-
-            <TrailerPlayer
-                visible={trailerVisible}
-                videoKey={trailerKey}
-                movieTitle={movie?.title || ""}
-                onClose={() => setTrailerVisible(false)}
             />
 
             {/* Full movie player — local file first, then archive stream */}
