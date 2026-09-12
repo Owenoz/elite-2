@@ -3,11 +3,9 @@ import {
     ActivityIndicator, TouchableOpacity, StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
 import useFetch from "../../services/useFetch";
 import { icons } from "@/constants/icons";
 import { images } from "@/constants/images";
-import MovieCard from "@/components/MovieCard";
 import SearchBar from "@/components/SearchBar";
 import { getAvailableMovies, getTrending, type EliteMovie, type TrendingSearch } from "@/services/eliteApi";
 
@@ -149,10 +147,8 @@ const Index = () => {
                                         style={S.featuredImage}
                                         resizeMode="cover"
                                     />
-                                    <LinearGradient
-                                        colors={["transparent", "rgba(9,9,15,0.98)"]}
-                                        style={S.featuredGradient}
-                                    />
+                                    {/* Pure View gradient — no native module needed */}
+                                    <View style={S.featuredGradient} />
                                     <View style={S.featuredInfo}>
                                         <View style={S.featuredBadge}>
                                             <Text style={S.featuredBadgeText}>✦ FEATURED</Text>
@@ -219,7 +215,7 @@ const S = StyleSheet.create({
     loadingText:    { color: "#666", fontSize: 13, marginTop: 12 },
     featuredCard:   { marginHorizontal: 20, borderRadius: 18, overflow: "hidden", height: 220, elevation: 10 },
     featuredImage:  { width: "100%", height: "100%", position: "absolute" },
-    featuredGradient:{ position: "absolute", bottom: 0, left: 0, right: 0, height: 160 },
+    featuredGradient:{ position: "absolute", bottom: 0, left: 0, right: 0, height: 160, backgroundColor: "rgba(9,9,15,0.7)" },
     featuredInfo:   { position: "absolute", bottom: 16, left: 16, right: 16 },
     featuredBadge:  { backgroundColor: GOLD, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, marginBottom: 6 },
     featuredBadgeText:{ color: "#000", fontSize: 9, fontWeight: "800", letterSpacing: 1.5 },
