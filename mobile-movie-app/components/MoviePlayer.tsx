@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { icons } from "@/constants/icons";
-import { getArchiveEmbedUrl } from "@/services/supabase";
+import { getArchiveEmbedUrl } from "@/services/eliteApi";
 
 const { width, height } = Dimensions.get("window");
 const GOLD = "#D4AF37";
