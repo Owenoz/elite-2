@@ -1,5 +1,4 @@
 import { Stack } from "expo-router";
-import './globals.css'
 import { StatusBar } from "react-native";
 import { AuthProvider } from "@/context/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
