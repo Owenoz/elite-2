@@ -1,22 +1,15 @@
-// ─── Elite Movies API Service ─────────────────────────────────────────────────
-// Backend: https://elitemovies.duckdns.org/api
+/**
+ * Elite Movies — Supabase API Service
+ * All data operations go directly to Supabase — no PHP server needed.
+ */
 
-const BASE_URL = (
-  process.env.EXPO_PUBLIC_API_URL ||
-  "https://elitemovies.duckdns.org/api"
-).replace(/\/$/, "");
+import { createClient } from "@supabase/supabase-js";
 
-// Timeout for all API requests (ms)
-const API_TIMEOUT = 15000;
+const SUPABASE_URL  = "https://ooptltgrxpcluvjbhfbd.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vcHRsdGdyeHBjbHV2amJoZmJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MDAyMTgsImV4cCI6MjEwNTA3NjIxOH0.dtqzoYwMEfuYHo4c3O89boLP6vAbUJn0r0uo0xO1n0A";
+const TMDB_KEY      = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI0NzJkOWQyMTczM2Q3YWMzMDVkOWI2NGIwMTNmYjkwZiIsIm5iZiI6MTc1MTkwNDI1OS4yMzMsInN1YiI6IjY4NmJmMDAzZTkwOTFiMjlkYTlhNDFmNSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.3yujtwat5S53QuiMkaHfFrj6gJZSvUKPu5S_qZp_dnA";
 
-// Browser-like UA to bypass Cloudflare bot protection on shared hosting
-const REQUEST_HEADERS = {
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  "User-Agent":
-    "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-  "X-Requested-With": "EliteMoviesApp",
-};
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,12 +29,6 @@ export interface EliteMovie {
   created_at: string;
 }
 
-export interface PaymentCreateResult {
-  reference: string;
-  email_sent: boolean;
-  message: string;
-}
-
 export interface PaymentVerifyResult {
   verified: boolean;
   movie_id: number;
@@ -49,12 +36,6 @@ export interface PaymentVerifyResult {
   archive_url: string | null;
   archive_identifier: string | null;
   message: string;
-}
-
-export interface AccessResult {
-  has_access: boolean;
-  archive_url: string | null;
-  archive_identifier: string | null;
 }
 
 export interface FavoriteMovie {
@@ -68,21 +49,6 @@ export interface FavoriteMovie {
   created_at: string;
 }
 
-export interface DownloadedMovie {
-  id: number;
-  email: string;
-  movie_id: number;
-  movie_title: string;
-  archive_url: string;
-  archive_identifier: string | null;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  overview: string | null;
-  vote_average: number | null;
-  runtime: number | null;
-  downloaded_at: string;
-}
-
 export interface TrendingSearch {
   search_term: string;
   movie_id: number;
@@ -91,255 +57,430 @@ export interface TrendingSearch {
   count: number;
 }
 
-// ─── Core fetch wrapper ───────────────────────────────────────────────────────
+// ─── Helper ───────────────────────────────────────────────────────────────────
 
-async function api<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<{ success: boolean; data?: T; error?: string }> {
-  try {
-    // AbortController gives us a request timeout
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), API_TIMEOUT);
+function generateOtp(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
 
-    const res = await fetch(`${BASE_URL}/${path}`, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        ...REQUEST_HEADERS,
-        ...(options.headers || {}),
-      },
-    });
-
-    clearTimeout(timer);
-
-    // Cloudflare challenge page — not JSON, handle gracefully
-    const contentType = res.headers.get("content-type") || "";
-    if (!contentType.includes("application/json")) {
-      console.warn(`[EliteAPI] Non-JSON response from ${path} (status ${res.status})`);
-      return {
-        success: false,
-        error: res.status === 403
-          ? "API blocked by Cloudflare. See setup instructions."
-          : `Server error ${res.status}`,
-      };
-    }
-
-    const json = await res.json();
-    return json;
-  } catch (err: any) {
-    if (err?.name === "AbortError") {
-      console.error(`[EliteAPI] Timeout on ${path}`);
-      return { success: false, error: "Request timed out. Check your connection." };
-    }
-    console.error(`[EliteAPI] ${path}:`, err.message);
-    return { success: false, error: err.message || "Network error" };
-  }
+function generateReference(): string {
+  return "ELITE-" + Math.random().toString(36).slice(2, 10).toUpperCase() + "-" + Date.now();
 }
 
 // ─── Movies ───────────────────────────────────────────────────────────────────
 
-/** Get all available movies in the catalogue */
 export const getAvailableMovies = async (
   page = 1,
-  limit = 20
+  limit = 50
 ): Promise<EliteMovie[]> => {
-  const r = await api<{ movies: EliteMovie[] }>(
-    `movies?page=${page}&limit=${limit}`
-  );
-  return r.data?.movies ?? [];
+  const from = (page - 1) * limit;
+  const to   = from + limit - 1;
+  const { data, error } = await supabase
+    .from("movies")
+    .select("*")
+    .eq("is_available", true)
+    .order("created_at", { ascending: false })
+    .range(from, to);
+  if (error) { console.error("getAvailableMovies:", error.message); return []; }
+  return (data as EliteMovie[]) || [];
 };
 
-/** Get a movie from the catalogue by its TMDB id (returns null if not added yet) */
-export const getMovieByTmdbId = async (
-  tmdbId: number
-): Promise<EliteMovie | null> => {
-  const r = await api<EliteMovie>(`movies?tmdb_id=${tmdbId}`);
-  return r.success && r.data ? r.data : null;
+export const getMovieByTmdbId = async (tmdbId: number): Promise<EliteMovie | null> => {
+  const { data, error } = await supabase
+    .from("movies")
+    .select("*")
+    .eq("tmdb_id", tmdbId)
+    .maybeSingle();
+  if (error) return null;
+  return data as EliteMovie | null;
 };
 
-/** Search catalogue by title */
-export const searchCatalogue = async (
-  query: string
-): Promise<EliteMovie[]> => {
-  const r = await api<EliteMovie[]>(
-    `movies?search=${encodeURIComponent(query)}`
-  );
-  return r.data ?? [];
+export const searchCatalogue = async (query: string): Promise<EliteMovie[]> => {
+  const { data, error } = await supabase
+    .from("movies")
+    .select("*")
+    .ilike("title", `%${query}%`)
+    .eq("is_available", true)
+    .limit(30);
+  if (error) return [];
+  return (data as EliteMovie[]) || [];
 };
 
-// ─── Payments ─────────────────────────────────────────────────────────────────
+// ─── Payments + OTP ───────────────────────────────────────────────────────────
 
 /**
- * Start a payment — creates a pending record and sends OTP to email.
- * Returns the payment reference needed for verification.
+ * Step 1 of payment: creates a pending record + generates OTP.
+ * NOTE: OTP is returned in the response for demo mode.
+ * In production wire up Supabase Edge Function / Resend to email it.
  */
 export const createPayment = async (
   email: string,
   movieId: number,
   movieTitle: string
-): Promise<PaymentCreateResult | null> => {
-  const r = await api<PaymentCreateResult>("payments?action=create", {
-    method: "POST",
-    body: JSON.stringify({ email, movie_id: movieId, movie_title: movieTitle }),
-  });
-  if (!r.success) {
-    console.error("[EliteAPI] createPayment:", r.error);
-    return null;
+): Promise<{ reference: string; email_sent: boolean; message: string; already_paid?: boolean } | null> => {
+  // Check if already paid
+  const { data: existing } = await supabase
+    .from("downloads")
+    .select("id")
+    .eq("email", email.toLowerCase())
+    .eq("movie_id", movieId)
+    .maybeSingle();
+
+  if (existing) {
+    return { reference: "", email_sent: false, message: "Already paid", already_paid: true };
   }
-  return r.data ?? null;
+
+  const reference = generateReference();
+  const otp       = generateOtp();
+  const expires   = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+  // Insert pending payment
+  const { error: payErr } = await supabase.from("payments").insert({
+    email: email.toLowerCase(),
+    movie_id: movieId,
+    movie_title: movieTitle,
+    amount: 5000,
+    currency: "UGX",
+    status: "pending",
+    reference,
+  });
+  if (payErr) { console.error("createPayment:", payErr.message); return null; }
+
+  // Delete old unused OTPs for this email
+  await supabase.from("otp_codes")
+    .delete()
+    .eq("email", email.toLowerCase())
+    .eq("purpose", "payment")
+    .eq("used", false);
+
+  // Insert new OTP
+  await supabase.from("otp_codes").insert({
+    email: email.toLowerCase(),
+    code: otp,
+    purpose: "payment",
+    used: false,
+    expires_at: expires,
+  });
+
+  // TODO: send real email via Supabase Edge Function
+  // For now: OTP shown in message (demo mode)
+  const message = `[Demo] Your code is: ${otp}`;
+
+  return { reference, email_sent: false, message };
 };
 
 /**
- * Verify OTP → completes payment → returns archive stream info.
+ * Step 2: verify OTP → complete payment → unlock movie.
  */
 export const verifyPayment = async (
   email: string,
   otp: string,
   reference: string
-): Promise<PaymentVerifyResult | null> => {
-  const r = await api<PaymentVerifyResult>("payments?action=verify", {
-    method: "POST",
-    body: JSON.stringify({ email, otp, reference }),
-  });
-  if (!r.success) {
-    throw new Error(r.error || "Verification failed");
-  }
-  return r.data ?? null;
+): Promise<PaymentVerifyResult> => {
+  const lc = email.toLowerCase();
+
+  // Find OTP
+  const { data: otpRow } = await supabase
+    .from("otp_codes")
+    .select("*")
+    .eq("email", lc)
+    .eq("code", otp)
+    .eq("purpose", "payment")
+    .eq("used", false)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!otpRow) throw new Error("Invalid or expired code. Try again.");
+
+  // Find pending payment
+  const { data: payment } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("reference", reference)
+    .eq("email", lc)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (!payment) throw new Error("Payment record not found.");
+
+  // Mark OTP used
+  await supabase.from("otp_codes").update({ used: true }).eq("id", otpRow.id);
+
+  // Mark payment completed
+  await supabase.from("payments").update({ status: "completed" }).eq("id", payment.id);
+
+  // Get movie archive info
+  const { data: movie } = await supabase
+    .from("movies")
+    .select("archive_identifier, archive_url")
+    .eq("tmdb_id", payment.movie_id)
+    .maybeSingle();
+
+  const archiveUrl        = movie?.archive_url || null;
+  const archiveIdentifier = movie?.archive_identifier || null;
+
+  // Record download access (upsert — safe to call multiple times)
+  await supabase.from("downloads").upsert(
+    { email: lc, movie_id: payment.movie_id, movie_title: payment.movie_title, archive_url: archiveUrl },
+    { onConflict: "email,movie_id" }
+  );
+
+  return {
+    verified: true,
+    movie_id: payment.movie_id,
+    movie_title: payment.movie_title,
+    archive_url: archiveUrl,
+    archive_identifier: archiveIdentifier,
+    message: "Payment verified! You now have access.",
+  };
 };
 
-/**
- * Resend OTP for an existing pending payment.
- */
 export const resendOtp = async (
   email: string,
   reference: string
 ): Promise<{ message: string } | null> => {
-  const r = await api<{ message: string }>("payments?action=resend", {
-    method: "POST",
-    body: JSON.stringify({ email, reference }),
+  const lc = email.toLowerCase();
+
+  // Verify payment exists
+  const { data: payment } = await supabase
+    .from("payments")
+    .select("movie_title")
+    .eq("reference", reference)
+    .eq("email", lc)
+    .maybeSingle();
+  if (!payment) return null;
+
+  const otp     = generateOtp();
+  const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+  await supabase.from("otp_codes")
+    .delete().eq("email", lc).eq("purpose", "payment").eq("used", false);
+
+  await supabase.from("otp_codes").insert({
+    email: lc, code: otp, purpose: "payment", used: false, expires_at: expires,
   });
-  return r.data ?? null;
+
+  return { message: `[Demo] New code: ${otp}` };
 };
 
-/**
- * Check if an email already has paid access to a movie.
- */
 export const checkAccess = async (
   email: string,
   movieId: number
-): Promise<AccessResult> => {
-  const r = await api<AccessResult>(
-    `payments?email=${encodeURIComponent(email)}&movie_id=${movieId}`
-  );
-  return r.data ?? { has_access: false, archive_url: null, archive_identifier: null };
+): Promise<{ has_access: boolean; archive_url: string | null; archive_identifier: string | null }> => {
+  const { data } = await supabase
+    .from("downloads")
+    .select("archive_url, movies(archive_identifier)")
+    .eq("email", email.toLowerCase())
+    .eq("movie_id", movieId)
+    .maybeSingle();
+
+  return {
+    has_access: !!data,
+    archive_url: (data as any)?.archive_url || null,
+    archive_identifier: (data as any)?.movies?.archive_identifier || null,
+  };
 };
 
 // ─── Downloads ────────────────────────────────────────────────────────────────
 
-/** Get all movies an email has paid for */
-export const getDownloads = async (
-  email: string
-): Promise<DownloadedMovie[]> => {
-  const r = await api<DownloadedMovie[]>(
-    `downloads?email=${encodeURIComponent(email)}`
-  );
-  return r.data ?? [];
+export const getDownloads = async (email: string) => {
+  const { data } = await supabase
+    .from("downloads")
+    .select("*, movies(archive_identifier, poster_path, backdrop_path, overview, vote_average, runtime)")
+    .eq("email", email.toLowerCase())
+    .order("downloaded_at", { ascending: false });
+  return data || [];
 };
 
-/** Check access to a single movie + get its stream URL */
-export const getMovieAccess = async (
-  email: string,
-  movieId: number
-): Promise<AccessResult> => {
-  const r = await api<AccessResult>(
-    `downloads?email=${encodeURIComponent(email)}&movie_id=${movieId}`
-  );
-  return r.data ?? { has_access: false, archive_url: null, archive_identifier: null };
+export const getMovieAccess = async (email: string, movieId: number) => {
+  const { data } = await supabase
+    .from("downloads")
+    .select("archive_url, movies(archive_identifier)")
+    .eq("email", email.toLowerCase())
+    .eq("movie_id", movieId)
+    .maybeSingle();
+  return {
+    has_access: !!data,
+    archive_url: (data as any)?.archive_url || null,
+    archive_identifier: (data as any)?.movies?.archive_identifier || null,
+  };
 };
 
 // ─── Favorites ────────────────────────────────────────────────────────────────
 
-export const getFavorites = async (
-  email: string
-): Promise<FavoriteMovie[]> => {
-  const r = await api<FavoriteMovie[]>(
-    `favorites?email=${encodeURIComponent(email)}`
-  );
-  return r.data ?? [];
+export const getFavorites = async (email: string): Promise<FavoriteMovie[]> => {
+  const { data } = await supabase
+    .from("favorites")
+    .select("*")
+    .eq("user_email", email.toLowerCase())
+    .order("created_at", { ascending: false });
+  return (data as FavoriteMovie[]) || [];
 };
 
-export const checkFavorite = async (
-  email: string,
-  movieId: number
-): Promise<boolean> => {
-  const r = await api<{ is_favorited: boolean }>(
-    `favorites?email=${encodeURIComponent(email)}&movie_id=${movieId}`
-  );
-  return r.data?.is_favorited ?? false;
+export const checkFavorite = async (email: string, movieId: number): Promise<boolean> => {
+  const { data } = await supabase
+    .from("favorites")
+    .select("id")
+    .eq("user_email", email.toLowerCase())
+    .eq("movie_id", movieId)
+    .maybeSingle();
+  return !!data;
 };
 
 export const addFavorite = async (
-  email: string,
-  movieId: number,
-  title: string,
-  posterUrl: string,
-  voteAverage: number,
-  releaseYear: number
+  email: string, movieId: number, title: string,
+  posterUrl: string, voteAverage: number, releaseYear: number
 ): Promise<boolean> => {
-  const r = await api("favorites", {
-    method: "POST",
-    body: JSON.stringify({
-      email,
-      movie_id: movieId,
-      title,
-      poster_url: posterUrl,
-      vote_average: voteAverage,
-      release_year: releaseYear,
-    }),
-  });
-  return r.success;
+  const { error } = await supabase.from("favorites").upsert(
+    { user_email: email.toLowerCase(), movie_id: movieId, title, poster_url: posterUrl, vote_average: voteAverage, release_year: releaseYear },
+    { onConflict: "user_email,movie_id" }
+  );
+  return !error;
 };
 
-export const removeFavorite = async (
-  email: string,
-  movieId: number
-): Promise<boolean> => {
-  const r = await api("favorites", {
-    method: "DELETE",
-    body: JSON.stringify({ email, movie_id: movieId }),
-  });
-  return r.success;
+export const removeFavorite = async (email: string, movieId: number): Promise<boolean> => {
+  const { error } = await supabase
+    .from("favorites")
+    .delete()
+    .eq("user_email", email.toLowerCase())
+    .eq("movie_id", movieId);
+  return !error;
 };
 
 // ─── Search / Trending ────────────────────────────────────────────────────────
 
 export const getTrending = async (limit = 5): Promise<TrendingSearch[]> => {
-  const r = await api<TrendingSearch[]>(`search?limit=${limit}`);
-  return r.data ?? [];
+  const { data } = await supabase
+    .from("search_counts")
+    .select("*")
+    .order("count", { ascending: false })
+    .limit(limit);
+  return (data as TrendingSearch[]) || [];
 };
 
 export const trackSearch = async (
-  term: string,
-  movieId: number,
-  title: string,
-  posterUrl: string
+  term: string, movieId: number, title: string, posterUrl: string
 ): Promise<void> => {
-  await api("search", {
-    method: "POST",
-    body: JSON.stringify({
-      search_term: term,
-      movie_id: movieId,
-      title,
-      poster_url: posterUrl,
-    }),
-  });
+  const lc = term.toLowerCase();
+  const { data: existing } = await supabase
+    .from("search_counts")
+    .select("id, count")
+    .eq("search_term", lc)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from("search_counts")
+      .update({ count: existing.count + 1 })
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("search_counts").insert({
+      search_term: lc, movie_id: movieId, title, poster_url: posterUrl, count: 1,
+    });
+  }
 };
 
-// ─── Internet Archive helpers (client-side, no backend needed) ────────────────
+// ─── Archive.org helpers (client-side) ───────────────────────────────────────
 
-export const getArchiveEmbedUrl = (identifier: string): string =>
-  `https://archive.org/embed/${identifier}?autoplay=1`;
+export const getArchiveEmbedUrl   = (id: string) => `https://archive.org/embed/${id}?autoplay=1`;
+export const getArchiveDetailsUrl = (id: string) => `https://archive.org/details/${id}`;
 
-export const getArchiveDetailsUrl = (identifier: string): string =>
-  `https://archive.org/details/${identifier}`;
+// ─── Archive.org search (used by admin) ──────────────────────────────────────
+
+export const searchArchive = async (query: string): Promise<any[]> => {
+  try {
+    const q   = encodeURIComponent(`title:(${query}) AND mediatype:movies`);
+    const url = `https://archive.org/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=year&rows=8&output=json`;
+    const res = await fetch(url);
+    const d   = await res.json();
+    return d?.response?.docs || [];
+  } catch { return []; }
+};
+
+export const getArchiveMetadata = async (identifier: string): Promise<any> => {
+  try {
+    const res   = await fetch(`https://archive.org/metadata/${identifier}/files`);
+    const d     = await res.json();
+    const files = (d?.result || []).filter((f: any) =>
+      f.format && (f.format.toLowerCase().includes("mp4") ||
+                   f.format.toLowerCase().includes("mpeg4"))
+    ).map((f: any) => ({
+      name: f.name,
+      format: f.format,
+      size: f.size ? (f.size / 1024 / 1024).toFixed(1) + " MB" : "?",
+      url: `https://archive.org/download/${identifier}/${f.name}`,
+    }));
+    const best = files.find((f: any) => f.name.includes("512") || f.name.includes("256")) || files[0] || null;
+    return { files, best_file: best, embed_url: getArchiveEmbedUrl(identifier), identifier };
+  } catch { return { files: [], best_file: null }; }
+};
+
+// ─── Admin: upsert movie ──────────────────────────────────────────────────────
+
+export const adminUpsertMovie = async (movie: Partial<EliteMovie>): Promise<EliteMovie | null> => {
+  const { data, error } = await supabase
+    .from("movies")
+    .upsert(movie, { onConflict: "tmdb_id" })
+    .select()
+    .single();
+  if (error) { console.error("adminUpsertMovie:", error.message); return null; }
+  return data as EliteMovie;
+};
+
+export const adminToggleAvailable = async (id: number): Promise<void> => {
+  const { data } = await supabase.from("movies").select("is_available").eq("id", id).single();
+  if (data) await supabase.from("movies").update({ is_available: !data.is_available }).eq("id", id);
+};
+
+export const adminDeleteMovie = async (id: number): Promise<void> => {
+  await supabase.from("movies").delete().eq("id", id);
+};
+
+export const adminGetStats = async () => {
+  const [movies, payments, downloads, pending, today] = await Promise.all([
+    supabase.from("movies").select("id", { count: "exact", head: true }).eq("is_available", true),
+    supabase.from("payments").select("amount").eq("status", "completed"),
+    supabase.from("downloads").select("id", { count: "exact", head: true }),
+    supabase.from("payments").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("payments").select("amount").eq("status", "completed")
+      .gte("created_at", new Date(new Date().setHours(0,0,0,0)).toISOString()),
+  ]);
+
+  const totalRevenue = (payments.data || []).reduce((s: number, p: any) => s + (p.amount || 0), 0);
+  const todayRevenue = (today.data || []).reduce((s: number, p: any) => s + (p.amount || 0), 0);
+
+  const recent = await supabase
+    .from("payments")
+    .select("email, movie_title, amount, created_at")
+    .eq("status", "completed")
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  return {
+    movies_available: movies.count || 0,
+    revenue_ugx: totalRevenue,
+    today_revenue: todayRevenue,
+    downloads: downloads.count || 0,
+    pending_payments: pending.count || 0,
+    recent_payments: recent.data || [],
+  };
+};
+
+// ─── TMDB auto-fetch (used by admin) ─────────────────────────────────────────
+
+export const tmdbFetch = async (tmdbId: number): Promise<any> => {
+  const res = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}`, {
+    headers: { Authorization: `Bearer ${TMDB_KEY}`, Accept: "application/json" },
+  });
+  return res.ok ? res.json() : null;
+};
+
+export const tmdbSearch = async (query: string): Promise<any[]> => {
+  const res = await fetch(
+    `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&page=1`,
+    { headers: { Authorization: `Bearer ${TMDB_KEY}`, Accept: "application/json" } }
+  );
+  const d = res.ok ? await res.json() : null;
+  return d?.results || [];
+};

@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Elite Movies — Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --bg:#09090F;--bg2:#0D0D17;--card:#1C1B2E;--border:#2a2840;
+  --gold:#D4AF37;--gold-dim:rgba(212,175,55,.12);--text:#E5E5E5;
+  --muted:#6B7280;--muted2:#A8B5DB;--green:#16a34a;--red:#dc2626;
+  --sidebar:220px;--r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;display:flex;}
+a{color:var(--gold);text-decoration:none;}
+/* ── Sidebar ── */
+.sidebar{width:var(--sidebar);min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;}
+.sb-brand{display:flex;align-items:center;gap:10px;padding:20px 16px 18px;border-bottom:1px solid var(--border);}
+.sb-brand .crown{font-size:24px;}
+.sb-brand .name{color:var(--gold);font-size:13px;font-weight:800;letter-spacing:1.5px;}
+.sb-brand .sub{color:var(--muted);font-size:10px;margin-top:1px;}
+.sb-nav{list-style:none;flex:1;padding:10px 8px;}
+.sb-nav li{margin-bottom:2px;}
+.nav-link{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--muted2);font-size:13px;font-weight:500;cursor:pointer;transition:.15s;}
+.nav-link:hover{background:var(--card);color:var(--text);}
+.nav-link.active{background:var(--gold-dim);color:var(--gold);border:1px solid rgba(212,175,55,.25);}
+.sb-footer{padding:12px 8px;border-top:1px solid var(--border);}
+.sb-footer .logout{color:var(--muted);cursor:pointer;}
+.sb-footer .logout:hover{color:var(--red);}
+/* ── Main ── */
+.main{margin-left:var(--sidebar);flex:1;padding:28px 32px 60px;}
+.page-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;gap:16px;flex-wrap:wrap;}
+.page-header h2{font-size:22px;font-weight:800;}
+.sub{color:var(--muted);font-size:13px;margin-top:3px;}
+/* ── Pages ── */
+.page{display:none;}
+.page.active{display:block;}
+/* ── Stats ── */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:16px;margin-bottom:24px;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px 16px;}
+.stat-icon{font-size:22px;margin-bottom:8px;display:block;}
+.stat-val{font-size:26px;font-weight:800;color:var(--gold);line-height:1;}
+.stat-label{font-size:12px;color:var(--muted);margin-top:4px;}
+/* ── Card ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.card-header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px;}
+.card-header h3{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.card-body{padding:20px;}
+.mt-4{margin-top:16px;} .mt-6{margin-top:24px;} .mt-3{margin-top:12px;}
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{background:var(--bg2);color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,.02);}
+.empty-row,.loading-row{text-align:center;color:var(--muted);padding:28px!important;}
+.poster-thumb{width:36px;height:54px;object-fit:cover;border-radius:5px;}
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;border:none;cursor:pointer;transition:.15s;text-decoration:none;white-space:nowrap;}
+.btn:hover{opacity:.88;}
+.btn-gold{background:var(--gold);color:#000;}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border);}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold);}
+.btn-danger{background:rgba(220,38,38,.15);color:#f87171;border:1px solid rgba(220,38,38,.3);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-full{width:100%;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+/* ── Inputs ── */
+.input{background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 13px;font-size:13px;outline:none;transition:.15s;width:100%;}
+.input:focus{border-color:var(--gold);}
+.input::placeholder{color:var(--muted);}
+textarea.input{resize:vertical;}
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label{font-size:12px;font-weight:700;color:var(--muted2);}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.form-grid .full{grid-column:1/-1;}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+/* ── Badges ── */
+.badge{display:inline-block;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;}
+.badge-green{background:rgba(22,163,74,.2);color:#4ade80;}
+.badge-red{background:rgba(220,38,38,.2);color:#f87171;}
+.badge-gold{background:var(--gold-dim);color:var(--gold);}
+.badge-warn{background:rgba(202,138,4,.2);color:#fbbf24;}
+.cursor{cursor:pointer;}
+/* ── Login ── */
+body.login-mode{align-items:center;justify-content:center;}
+.login-box{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:36px 32px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+.login-logo{text-align:center;margin-bottom:28px;}
+.login-logo .crown{font-size:42px;display:block;margin-bottom:8px;}
+.login-logo h1{color:var(--gold);font-size:22px;font-weight:900;letter-spacing:2px;}
+.login-logo p{color:var(--muted);font-size:12px;margin-top:4px;}
+.login-form{display:flex;flex-direction:column;gap:14px;}
+.login-note{color:var(--muted);font-size:11px;text-align:center;margin-top:20px;}
+/* ── Alert ── */
+.alert{padding:10px 14px;border-radius:8px;font-size:13px;border:1px solid transparent;margin-bottom:8px;}
+.alert-error{background:rgba(220,38,38,.1);color:#f87171;border-color:rgba(220,38,38,.3);}
+.alert-success{background:rgba(22,163,74,.1);color:#4ade80;border-color:rgba(22,163,74,.3);}
+.alert-info{background:var(--gold-dim);color:var(--gold);border-color:rgba(212,175,55,.3);}
+/* ── Steps ── */
+.step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--gold);color:#000;font-size:11px;font-weight:900;}
+.tab-bar{display:flex;border-bottom:1px solid var(--border);}
+.tab-btn{padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;border:none;color:var(--muted);border-bottom:2px solid transparent;transition:.15s;}
+.tab-btn.active{color:var(--gold);border-bottom-color:var(--gold);}
+.tab-pane{display:none;padding:20px;}
+.tab-pane.active{display:block;}
+/* ── Drop zone ── */
+.drop-zone{border:2px dashed var(--border);border-radius:14px;padding:44px 24px;text-align:center;cursor:pointer;transition:.2s;background:var(--bg2);}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--gold);background:var(--gold-dim);}
+.drop-zone h4{font-size:16px;font-weight:700;margin-bottom:6px;}
+.drop-zone p{font-size:12px;color:var(--muted);}
+.progress-wrap{display:none;margin-top:14px;}
+.prog-bg{background:var(--bg2);border-radius:20px;height:8px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--gold);border-radius:20px;transition:width .3s;width:0%;}
+.prog-label{font-size:12px;color:var(--muted2);margin-top:6px;display:flex;justify-content:space-between;}
+/* ── TMDB results ── */
+.results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;}
+.result-card{background:var(--bg2);border:2px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:.15s;}
+.result-card:hover,.result-card.active{border-color:var(--gold);}
+.result-card img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block;}
+.result-card-info{padding:8px;}
+.result-card-title{font-size:11px;font-weight:700;line-height:1.3;}
+.result-card-year{font-size:10px;color:var(--muted);margin-top:2px;}
+/* ── Archive results ── */
+.archive-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
+.archive-card{background:var(--bg2);border:2px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:.15s;}
+.archive-card:hover,.archive-card.active{border-color:var(--gold);}
+.archive-card h4{font-size:13px;font-weight:700;margin-bottom:4px;}
+.archive-id{font-size:11px;color:var(--gold);font-family:monospace;}
+/* ── Final preview ── */
+.final-preview{display:flex;gap:16px;background:var(--bg2);border-radius:10px;padding:16px;border:1px solid var(--border);}
+.final-preview img{width:72px;border-radius:8px;flex-shrink:0;}
+.final-info h3{font-size:17px;font-weight:800;}
+.final-info p{font-size:12px;color:var(--muted2);margin-top:4px;}
+/* ── Pagination ── */
+.pagination{display:flex;gap:6px;padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap;}
+.page-btn{min-width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:var(--bg2);border:1px solid var(--border);color:var(--muted2);font-size:12px;cursor:pointer;transition:.15s;}
+.page-btn:hover{border-color:var(--gold);color:var(--gold);}
+.page-btn.active{background:var(--gold);color:#000;font-weight:700;}
+/* ── Modal ── */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;display:none;align-items:center;justify-content:center;}
+.modal.open{display:flex;}
+.modal-box{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:28px;max-width:420px;width:90%;}
+.modal-box h3{font-size:18px;font-weight:700;}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;}
+/* ── Quick grid ── */
+.quick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;}
+.quick-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:.2s;}
+.quick-card:hover{border-color:var(--gold);}
+.quick-card span{font-size:28px;}
+.quick-card strong{font-size:14px;font-weight:700;}
+.quick-card p{font-size:12px;color:var(--muted);}
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg2);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:var(--gold);}
+</style>
+</head>
+<body class="login-mode" id="body">
+
+<!-- ══ LOGIN ═════════════════════════════════════════════════════════════════ -->
+<div class="login-box" id="loginBox">
+  <div class="login-logo">
+    <span class="crown">👑</span>
+    <h1>ELITE MOVIES</h1>
+    <p>Admin Portal</p>
+  </div>
+  <div id="loginAlert" style="display:none"></div>
+  <form class="login-form" onsubmit="doLogin(event)">
+    <div class="field">
+      <label>Admin Password</label>
+      <input class="input" type="password" id="loginPwd" placeholder="Enter admin password" autofocus required>
+    </div>
+    <button type="submit" class="btn btn-gold btn-full">Sign In →</button>
+  </form>
+  <p class="login-note">Elite Movies Management System · Powered by Supabase</p>
+</div>
+
+<!-- ══ APP (hidden until logged in) ═════════════════════════════════════════ -->
+<div id="app" style="display:none;width:100%;display:none">
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sb-brand">
+    <span class="crown">👑</span>
+    <div><div class="name">ELITE MOVIES</div><div class="sub">Admin Panel</div></div>
+  </div>
+  <ul class="sb-nav">
+    <li><div class="nav-link active" onclick="showPage('dashboard',this)">📊 Dashboard</div></li>
+    <li><div class="nav-link" onclick="showPage('addMovie',this)">➕ Add Movie</div></li>
+    <li><div class="nav-link" onclick="showPage('movies',this)">🎬 Movies</div></li>
+    <li><div class="nav-link" onclick="showPage('payments',this)">💳 Payments</div></li>
+    <li><div class="nav-link" onclick="showPage('downloads',this)">📥 Downloads</div></li>
+  </ul>
+  <div class="sb-footer">
+    <div class="nav-link logout" onclick="doLogout()">🚪 Logout</div>
+  </div>
+</nav>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- ── Dashboard ── -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div><h2>Dashboard</h2><p class="sub">Live overview</p></div>
+      <button class="btn btn-gold" onclick="showPage('addMovie',null)">+ Add Movie</button>
+    </div>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><span class="stat-icon">🎬</span><div class="stat-val" id="s-movies">—</div><div class="stat-label">Movies Live</div></div>
+      <div class="stat-card"><span class="stat-icon">💰</span><div class="stat-val" id="s-revenue">—</div><div class="stat-label">Total Revenue (UGX)</div></div>
+      <div class="stat-card"><span class="stat-icon">📅</span><div class="stat-val" id="s-today">—</div><div class="stat-label">Today's Revenue</div></div>
+      <div class="stat-card"><span class="stat-icon">📥</span><div class="stat-val" id="s-dl">—</div><div class="stat-label">Downloads</div></div>
+      <div class="stat-card"><span class="stat-icon">⏳</span><div class="stat-val" id="s-pending">—</div><div class="stat-label">Pending Payments</div></div>
+    </div>
+    <div class="card mt-6">
+      <div class="card-header"><h3>Recent Payments</h3><span class="badge badge-gold" style="cursor:pointer" onclick="showPage('payments',null)">View all →</span></div>
+      <div id="recentPayments"><div class="loading-row">Loading...</div></div>
+    </div>
+    <div class="quick-grid mt-6">
+      <div class="quick-card" onclick="showPage('addMovie',null)"><span>🎬</span><strong>Add New Movie</strong><p>Upload to archive.org + save</p></div>
+      <div class="quick-card" onclick="showPage('movies',null)"><span>📋</span><strong>Manage Movies</strong><p>Toggle, edit, delete</p></div>
+      <div class="quick-card" onclick="showPage('payments',null)"><span>💳</span><strong>Payments</strong><p>All transactions</p></div>
+      <div class="quick-card" onclick="showPage('downloads',null)"><span>📥</span><strong>Downloads</strong><p>User access records</p></div>
+    </div>
+  </div>
+
+  <!-- ── Add Movie ── -->
+  <div class="page" id="page-addMovie">
+    <div class="page-header">
+      <div><h2>Add / Edit Movie</h2><p class="sub">Auto-fetches TMDB · Auto-searches archive.org</p></div>
+      <button class="btn btn-outline" onclick="showPage('movies',null)">← Movies</button>
+    </div>
+
+    <!-- Step 1: TMDB -->
+    <div class="card" id="step1">
+      <div class="card-header"><h3><span class="step-num">1</span> Find on TMDB</h3></div>
+      <div class="card-body">
+        <div class="row">
+          <input class="input" style="flex:1" id="tmdbQ" placeholder="Search title e.g. The Avengers">
+          <span style="color:var(--muted)">or</span>
+          <input class="input" style="width:160px" id="tmdbId" type="number" placeholder="TMDB ID">
+          <button class="btn btn-gold" onclick="searchTMDB()">Search TMDB</button>
+        </div>
+        <div id="tmdbResults" class="results-grid mt-4" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- Step 2: Details -->
+    <div class="card mt-4" id="step2" style="display:none">
+      <div class="card-header"><h3><span class="step-num">2</span> Movie Details <span class="badge badge-gold">Auto-filled</span></h3></div>
+      <div class="card-body">
+        <div id="moviePreview" style="margin-bottom:16px"></div>
+        <input type="hidden" id="f_tmdb_id">
+        <div class="form-grid">
+          <div class="field"><label>Title *</label><input class="input" id="f_title"></div>
+          <div class="field"><label>Year</label><input class="input" id="f_year" type="number"></div>
+          <div class="field"><label>Rating</label><input class="input" id="f_rating" type="number" step="0.1"></div>
+          <div class="field"><label>Runtime (min)</label><input class="input" id="f_runtime" type="number"></div>
+          <div class="field full"><label>Overview</label><textarea class="input" id="f_overview" rows="3"></textarea></div>
+          <div class="field"><label>Poster Path</label><input class="input" id="f_poster"></div>
+          <div class="field"><label>Backdrop Path</label><input class="input" id="f_backdrop"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Archive -->
+    <div class="card mt-4" id="step3" style="display:none">
+      <div class="card-header"><h3><span class="step-num">3</span> Video Source</h3></div>
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('upload',this)">📤 Upload File</button>
+        <button class="tab-btn" onclick="switchTab('search',this)">🔍 Search Archive.org</button>
+        <button class="tab-btn" onclick="switchTab('manual',this)">✏️ Manual ID</button>
+      </div>
+      <div class="tab-pane active" id="tab-upload">
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('videoInput').click()">
+          <div style="font-size:36px;margin-bottom:10px">🎬</div>
+          <h4>Drop video file here</h4>
+          <p>MP4, MKV, AVI, MOV — Max 4 GB</p>
+          <input type="file" id="videoInput" accept="video/*" style="display:none" onchange="handleFile(this.files[0])">
+        </div>
+        <div id="filePreview" style="display:none;margin-top:12px;background:var(--bg2);border-radius:10px;padding:12px 16px;display:none;align-items:center;gap:12px;border:1px solid var(--border)">
+          <span style="font-size:28px">🎞️</span>
+          <div><div id="fileName" style="font-weight:700"></div><div id="fileSize" style="font-size:11px;color:var(--muted);margin-top:2px"></div></div>
+          <button onclick="clearFile()" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px">✕</button>
+        </div>
+        <div class="progress-wrap" id="progressWrap">
+          <div class="prog-bg"><div class="prog-fill" id="progFill"></div></div>
+          <div class="prog-label"><span id="progText">Uploading to archive.org…</span><span id="progPct">0%</span></div>
+        </div>
+        <div id="uploadMsg" style="display:none;margin-top:12px"></div>
+        <button class="btn btn-gold mt-4" id="uploadBtn" onclick="startUpload()" style="display:none">📤 Upload to Archive.org</button>
+      </div>
+      <div class="tab-pane" id="tab-search">
+        <div class="row" style="margin-bottom:14px">
+          <input class="input" style="flex:1" id="archiveQ" placeholder="Search archive.org…">
+          <button class="btn btn-outline" onclick="searchArchive()">Search</button>
+        </div>
+        <div id="archiveResults" class="archive-grid" style="display:none"></div>
+        <div id="archiveSelected" style="display:none;margin-top:14px;background:var(--bg2);border:1px solid var(--gold);border-radius:10px;padding:16px">
+          <h4 style="color:var(--gold);margin-bottom:10px">Selected</h4>
+          <div id="archiveSelectedInfo"></div>
+          <div class="form-grid mt-3">
+            <div class="field"><label>Identifier</label><input class="input" id="f_archive_id" placeholder="e.g. TheGeneralBuster1926"></div>
+            <div class="field"><label>Stream URL</label><input class="input" id="f_archive_url"></div>
+          </div>
+          <div id="fileList" style="display:none;margin-top:12px">
+            <p style="font-size:12px;color:var(--muted2);font-weight:700;margin-bottom:8px">Video files:</p>
+            <div id="fileListItems"></div>
+          </div>
+        </div>
+      </div>
+      <div class="tab-pane" id="tab-manual">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Enter an existing archive.org identifier.</p>
+        <div class="form-grid">
+          <div class="field"><label>Identifier</label><input class="input" id="manualId" placeholder="e.g. TheGeneralBuster1926"></div>
+          <div style="display:flex;align-items:flex-end"><button class="btn btn-outline" onclick="loadById()">Load →</button></div>
+          <div class="field"><label>Identifier (auto-filled)</label><input class="input" id="f_archive_id2" placeholder="auto-filled"></div>
+          <div class="field"><label>Stream URL</label><input class="input" id="f_archive_url2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Save -->
+    <div class="card mt-4" id="step4" style="display:none">
+      <div class="card-header"><h3><span class="step-num">4</span> Save to Catalogue</h3></div>
+      <div class="card-body">
+        <div class="final-preview" id="finalPreview"></div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer">
+          <input type="checkbox" id="f_available" checked>
+          <span style="font-size:13px">Make available immediately in the app</span>
+        </label>
+        <div id="saveMsg" style="display:none;margin-top:12px"></div>
+        <button class="btn btn-gold mt-4" style="font-size:15px;padding:12px 24px" id="saveBtn" onclick="saveMovie()">
+          💾 Save Movie to Elite Movies
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Movies List ── -->
+  <div class="page" id="page-movies">
+    <div class="page-header">
+      <div><h2>Movies Catalogue</h2><p class="sub" id="movieCountSub"></p></div>
+      <button class="btn btn-gold" onclick="showPage('addMovie',null)">+ Add Movie</button>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <input class="input" style="width:280px" id="movieSearch" placeholder="Search…" oninput="debounce(loadMovies,400)()">
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Poster</th><th>Title</th><th>Year</th><th>Rating</th><th>Archive</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="moviesBody"><tr><td colspan="7" class="loading-row">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="moviesPag"></div>
+    </div>
+  </div>
+
+  <!-- ── Payments ── -->
+  <div class="page" id="page-payments">
+    <div class="page-header">
+      <div><h2>Payments</h2><p class="sub">All transactions</p></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-gold active" onclick="filterPay('',this)">All</button>
+        <button class="btn btn-sm btn-outline" onclick="filterPay('completed',this)">Completed</button>
+        <button class="btn btn-sm btn-outline" onclick="filterPay('pending',this)">Pending</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Reference</th><th>Email</th><th>Movie</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+          <tbody id="paymentsBody"><tr><td colspan="6" class="loading-row">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="paymentsPag"></div>
+    </div>
+  </div>
+
+  <!-- ── Downloads ── -->
+  <div class="page" id="page-downloads">
+    <div class="page-header"><div><h2>Downloads</h2><p class="sub">User access records</p></div></div>
+    <div class="card">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Email</th><th>Movie</th><th>Stream</th><th>Date</th></tr></thead>
+          <tbody id="downloadsBody"><tr><td colspan="4" class="loading-row">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="downloadsPag"></div>
+    </div>
+  </div>
+
+</div><!-- .main -->
+</div><!-- #app -->
+
+<!-- Delete modal -->
+<div class="modal" id="delModal">
+  <div class="modal-box">
+    <h3>Delete Movie?</h3>
+    <p id="delName" style="color:var(--muted);margin-top:8px"></p>
+    <p style="margin-top:8px;font-size:13px">This removes it from the app immediately.</p>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="delConfirmBtn" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Supabase setup ────────────────────────────────────────────────────────────
+const { createClient } = supabase;
+const sb = createClient(
+  "https://ooptltgrxpcluvjbhfbd.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vcHRsdGdyeHBjbHV2amJoZmJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MDAyMTgsImV4cCI6MjEwNTA3NjIxOH0.dtqzoYwMEfuYHo4c3O89boLP6vAbUJn0r0uo0xO1n0A"
+);
+
+const ADMIN_PASSWORD = "EliteAdmin2024!";
+const TMDB_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI0NzJkOWQyMTczM2Q3YWMzMDVkOWI2NGIwMTNmYjkwZiIsIm5iZiI6MTc1MTkwNDI1OS4yMzMsInN1YiI6IjY4NmJmMDAzZTkwOTFiMjlkYTlhNDFmNSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.3yujtwat5S53QuiMkaHfFrj6gJZSvUKPu5S_qZp_dnA";
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function doLogin(e) {
+  e.preventDefault();
+  const pwd = document.getElementById("loginPwd").value;
+  if (pwd !== ADMIN_PASSWORD) {
+    showAlert("loginAlert", "error", "Incorrect password.");
+    return;
+  }
+  sessionStorage.setItem("elite_admin", "1");
+  initApp();
+}
+function doLogout() {
+  sessionStorage.removeItem("elite_admin");
+  location.reload();
+}
+function initApp() {
+  document.getElementById("body").classList.remove("login-mode");
+  document.getElementById("loginBox").style.display = "none";
+  document.getElementById("app").style.display = "flex";
+  loadDashboard();
+}
+if (sessionStorage.getItem("elite_admin")) initApp();
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function showPage(name, linkEl) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav-link").forEach(l => l.classList.remove("active"));
+  document.getElementById("page-" + name).classList.add("active");
+  if (linkEl) linkEl.classList.add("active");
+  // Reload data for the page
+  if (name === "dashboard") loadDashboard();
+  else if (name === "movies")    loadMovies();
+  else if (name === "payments")  loadPayments();
+  else if (name === "downloads") loadDownloads();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const [mRes, pRes, dRes, pdRes, todRes] = await Promise.all([
+    sb.from("movies").select("id", { count:"exact", head:true }).eq("is_available", true),
+    sb.from("payments").select("amount").eq("status","completed"),
+    sb.from("downloads").select("id", { count:"exact", head:true }),
+    sb.from("payments").select("id", { count:"exact", head:true }).eq("status","pending"),
+    sb.from("payments").select("amount").eq("status","completed")
+      .gte("created_at", new Date(new Date().setHours(0,0,0,0)).toISOString()),
+  ]);
+  document.getElementById("s-movies").textContent  = mRes.count || 0;
+  document.getElementById("s-revenue").textContent = num((pRes.data||[]).reduce((s,p)=>s+(p.amount||0),0));
+  document.getElementById("s-today").textContent   = num((todRes.data||[]).reduce((s,p)=>s+(p.amount||0),0));
+  document.getElementById("s-dl").textContent      = dRes.count || 0;
+  document.getElementById("s-pending").textContent = pdRes.count || 0;
+
+  const { data: rp } = await sb.from("payments").select("email,movie_title,amount,created_at")
+    .eq("status","completed").order("created_at",{ascending:false}).limit(5);
+  const el = document.getElementById("recentPayments");
+  if (!rp || !rp.length) { el.innerHTML = '<div class="empty-row">No payments yet</div>'; return; }
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="color:var(--muted);font-size:11px;text-transform:uppercase">
+      <td style="padding:8px 14px">Email</td><td style="padding:8px 14px">Movie</td>
+      <td style="padding:8px 14px">Amount</td><td style="padding:8px 14px">Date</td>
+    </tr>
+    ${rp.map(p=>`<tr style="border-top:1px solid var(--border)">
+      <td style="padding:8px 14px">${esc(p.email)}</td>
+      <td style="padding:8px 14px">${esc(p.movie_title||"—")}</td>
+      <td style="padding:8px 14px;color:var(--gold);font-weight:700">${num(p.amount)} UGX</td>
+      <td style="padding:8px 14px;color:var(--muted);font-size:11px">${new Date(p.created_at).toLocaleDateString()}</td>
+    </tr>`).join("")}
+  </table>`;
+}
+
+// ── Movies list ───────────────────────────────────────────────────────────────
+let moviePage = 1, deleteMovieId = null;
+async function loadMovies(page) {
+  if (page) moviePage = page;
+  const q = document.getElementById("movieSearch").value;
+  const from = (moviePage-1)*20, to = from+19;
+  let query = sb.from("movies").select("*", {count:"exact"}).order("created_at",{ascending:false}).range(from,to);
+  if (q) query = query.ilike("title", `%${q}%`);
+  const { data, count } = await query;
+  document.getElementById("movieCountSub").textContent = `${count||0} movies`;
+  const tbody = document.getElementById("moviesBody");
+  if (!data || !data.length) { tbody.innerHTML='<tr><td colspan="7" class="empty-row">No movies</td></tr>'; return; }
+  tbody.innerHTML = data.map(m => `<tr>
+    <td><img class="poster-thumb" src="${m.poster_path ? 'https://image.tmdb.org/t/p/w92'+m.poster_path : 'https://placehold.co/46x68/1C1B2E/D4AF37?text=?'}" alt="${esc(m.title)}"></td>
+    <td><strong>${esc(m.title)}</strong><div style="font-size:11px;color:var(--muted)">TMDB: ${m.tmdb_id}</div></td>
+    <td>${m.release_year||"—"}</td>
+    <td><span style="color:var(--gold);font-weight:700;font-size:12px">⭐ ${m.vote_average||"—"}</span></td>
+    <td>${m.archive_identifier ? `<a href="https://archive.org/details/${m.archive_identifier}" target="_blank" style="font-size:11px;font-family:monospace">📼 ${esc(m.archive_identifier)}</a>` : '<span style="color:var(--muted);font-size:11px">—</span>'}</td>
+    <td><button onclick="toggleMovie(${m.id})" style="background:none;border:none;cursor:pointer" class="badge ${m.is_available ? 'badge-green' : 'badge-red'}">${m.is_available ? '✅ Live' : '⛔ Hidden'}</button></td>
+    <td><div style="display:flex;gap:6px">
+      <button class="btn btn-sm btn-outline" onclick="editMovie(${m.tmdb_id})">Edit</button>
+      <button class="btn btn-sm btn-danger" onclick="deleteMoviePrompt(${m.id},'${esc(m.title)}')">Delete</button>
+    </div></td>
+  </tr>`).join("");
+  renderPag("moviesPag", moviePage, Math.ceil((count||0)/20), loadMovies);
+}
+async function toggleMovie(id) {
+  const { data } = await sb.from("movies").select("is_available").eq("id",id).single();
+  if (data) { await sb.from("movies").update({ is_available: !data.is_available }).eq("id",id); loadMovies(); }
+}
+function deleteMoviePrompt(id, title) {
+  deleteMovieId = id;
+  document.getElementById("delName").textContent = title;
+  document.getElementById("delModal").classList.add("open");
+}
+async function confirmDelete() {
+  if (!deleteMovieId) return;
+  await sb.from("movies").delete().eq("id", deleteMovieId);
+  closeModal(); loadMovies();
+}
+function closeModal() { document.getElementById("delModal").classList.remove("open"); deleteMovieId=null; }
+function editMovie(tmdbId) {
+  document.getElementById("tmdbId").value = tmdbId;
+  showPage("addMovie", document.querySelector('.nav-link[onclick*="addMovie"]'));
+  searchTMDB();
+}
+
+// ── Payments ──────────────────────────────────────────────────────────────────
+let payPage = 1, payStatus = "";
+async function loadPayments(page) {
+  if (page) payPage = page;
+  const from = (payPage-1)*20, to = from+19;
+  let query = sb.from("payments").select("*",{count:"exact"}).order("created_at",{ascending:false}).range(from,to);
+  if (payStatus) query = query.eq("status", payStatus);
+  const { data, count } = await query;
+  const tbody = document.getElementById("paymentsBody");
+  if (!data || !data.length) { tbody.innerHTML='<tr><td colspan="6" class="empty-row">No payments</td></tr>'; return; }
+  tbody.innerHTML = data.map(p=>`<tr>
+    <td><code style="font-size:11px;background:var(--bg2);padding:2px 6px;border-radius:4px;color:var(--muted2)">${esc(p.reference)}</code></td>
+    <td>${esc(p.email)}</td>
+    <td>${esc(p.movie_title||"—")}</td>
+    <td><strong style="color:var(--gold)">${num(p.amount)} ${p.currency}</strong></td>
+    <td><span class="badge ${p.status==='completed'?'badge-green':p.status==='pending'?'badge-warn':'badge-red'}">${p.status}</span></td>
+    <td style="color:var(--muted);font-size:11px">${new Date(p.created_at).toLocaleString()}</td>
+  </tr>`).join("");
+  renderPag("paymentsPag", payPage, Math.ceil((count||0)/20), loadPayments);
+}
+function filterPay(status, btn) {
+  payStatus = status; payPage = 1;
+  document.querySelectorAll('[onclick^="filterPay"]').forEach(b=>b.classList.remove("btn-gold","active"));
+  if (btn) btn.classList.add("btn-gold");
+  loadPayments();
+}
+
+// ── Downloads ─────────────────────────────────────────────────────────────────
+let dlPage = 1;
+async function loadDownloads(page) {
+  if (page) dlPage = page;
+  const from=(dlPage-1)*20, to=from+19;
+  const { data, count } = await sb.from("downloads").select("*",{count:"exact"}).order("downloaded_at",{ascending:false}).range(from,to);
+  const tbody = document.getElementById("downloadsBody");
+  if (!data||!data.length) { tbody.innerHTML='<tr><td colspan="4" class="empty-row">No downloads yet</td></tr>'; return; }
+  tbody.innerHTML = data.map(d=>`<tr>
+    <td>${esc(d.email)}</td>
+    <td>${esc(d.movie_title||"Movie #"+d.movie_id)}</td>
+    <td>${d.archive_url ? `<a href="${esc(d.archive_url)}" target="_blank" style="font-size:11px;color:var(--gold)">▶ Stream</a>` : "—"}</td>
+    <td style="color:var(--muted);font-size:11px">${new Date(d.downloaded_at).toLocaleString()}</td>
+  </tr>`).join("");
+  renderPag("downloadsPag", dlPage, Math.ceil((count||0)/20), loadDownloads);
+}
+
+// ── Add Movie: TMDB ───────────────────────────────────────────────────────────
+let selectedMovie = null;
+async function searchTMDB() {
+  const id = document.getElementById("tmdbId").value.trim();
+  const q  = document.getElementById("tmdbQ").value.trim();
+  if (!id && !q) return;
+  const headers = { Authorization: `Bearer ${TMDB_KEY}`, Accept:"application/json" };
+  if (id) {
+    const r = await fetch(`https://api.themoviedb.org/3/movie/${id}`, {headers});
+    if (r.ok) selectTMDB(await r.json());
+  } else {
+    const r = await fetch(`https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(q)}`, {headers});
+    const d = r.ok ? await r.json() : null;
+    renderTMDBResults(d?.results || []);
+  }
+}
+function renderTMDBResults(movies) {
+  const el = document.getElementById("tmdbResults");
+  el.style.display = "grid";
+  el.innerHTML = movies.slice(0,12).map(m=>`
+    <div class="result-card" onclick='selectTMDB(${JSON.stringify(m).replace(/'/g,"&#39;")})'>
+      <img src="${m.poster_path ? 'https://image.tmdb.org/t/p/w185'+m.poster_path : 'https://placehold.co/185x280/1C1B2E/D4AF37'}" loading="lazy">
+      <div class="result-card-info">
+        <div class="result-card-title">${esc(m.title)}</div>
+        <div class="result-card-year">${(m.release_date||"").slice(0,4)} · ⭐ ${m.vote_average?.toFixed(1)||"—"}</div>
+      </div>
+    </div>`).join("");
+}
+function selectTMDB(m) {
+  selectedMovie = m;
+  document.getElementById("f_tmdb_id").value     = m.id;
+  document.getElementById("f_title").value        = m.title||"";
+  document.getElementById("f_overview").value     = m.overview||"";
+  document.getElementById("f_year").value         = (m.release_date||"").slice(0,4);
+  document.getElementById("f_rating").value       = m.vote_average?.toFixed(1)||"";
+  document.getElementById("f_runtime").value      = m.runtime||"";
+  document.getElementById("f_poster").value       = m.poster_path||"";
+  document.getElementById("f_backdrop").value     = m.backdrop_path||"";
+  const poster = m.poster_path ? "https://image.tmdb.org/t/p/w185"+m.poster_path : "https://placehold.co/70x105/1C1B2E/D4AF37";
+  document.getElementById("moviePreview").innerHTML = `
+    <div style="display:flex;gap:14px;align-items:flex-start;background:var(--bg2);border-radius:10px;padding:14px;border:1px solid var(--border)">
+      <img src="${poster}" style="width:60px;border-radius:6px;flex-shrink:0">
+      <div>
+        <div style="font-size:16px;font-weight:700">${esc(m.title)}</div>
+        <div style="font-size:12px;color:var(--muted2);margin-top:3px">${(m.release_date||"").slice(0,4)} · ${m.runtime||"?"}min</div>
+        <div style="color:var(--gold);font-size:13px;margin-top:4px">⭐ ${m.vote_average?.toFixed(1)||"—"}/10</div>
+      </div>
+    </div>`;
+  document.getElementById("step2").style.display = "block";
+  document.getElementById("step3").style.display = "block";
+  document.getElementById("archiveQ").value = m.title + " " + (m.release_date||"").slice(0,4);
+  autoSearchArchive(m.title, (m.release_date||"").slice(0,4));
+  document.getElementById("step2").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+// ── Add Movie: Archive.org ────────────────────────────────────────────────────
+async function autoSearchArchive(title, year) {
+  try {
+    const q = encodeURIComponent(`title:(${title} ${year}) AND mediatype:movies`);
+    const r = await fetch(`https://archive.org/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=year&rows=8&output=json`);
+    const d = await r.json();
+    renderArchiveResults(d?.response?.docs||[], true);
+  } catch(e) {}
+}
+async function searchArchive() {
+  const q = document.getElementById("archiveQ").value.trim();
+  if (!q) return;
+  try {
+    const enc = encodeURIComponent(`title:(${q}) AND mediatype:movies`);
+    const r = await fetch(`https://archive.org/advancedsearch.php?q=${enc}&fl[]=identifier&fl[]=title&fl[]=year&rows=8&output=json`);
+    const d = await r.json();
+    renderArchiveResults(d?.response?.docs||[], false);
+  } catch(e) { alert("Archive search failed"); }
+}
+function renderArchiveResults(docs, autoSel) {
+  const el = document.getElementById("archiveResults");
+  el.style.display = docs.length ? "grid" : "none";
+  el.innerHTML = docs.map((d,i)=>`
+    <div class="archive-card ${i===0&&autoSel?'active':''}" onclick="selectArchive('${esc(d.identifier)}',this)">
+      <h4>${esc(d.title||d.identifier)}</h4>
+      <div class="archive-id">📼 ${esc(d.identifier)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">${d.year||""}</div>
+    </div>`).join("");
+  if (autoSel && docs.length) selectArchive(docs[0].identifier, el.querySelector(".archive-card"));
+}
+async function selectArchive(identifier, cardEl) {
+  document.querySelectorAll(".archive-card").forEach(c=>c.classList.remove("active"));
+  if (cardEl) cardEl.classList.add("active");
+  try {
+    const r = await fetch(`https://archive.org/metadata/${identifier}/files`);
+    const d = await r.json();
+    const files = (d.result||[]).filter(f=>f.format&&(f.format.toLowerCase().includes("mp4")||f.format.toLowerCase().includes("mpeg4")))
+      .map(f=>({name:f.name,size:f.size?(f.size/1024/1024).toFixed(1)+" MB":"?",url:`https://archive.org/download/${identifier}/${f.name}`}));
+    const best = files.find(f=>f.name.includes("512")||f.name.includes("256"))||files[0];
+    document.getElementById("f_archive_id").value  = identifier;
+    document.getElementById("f_archive_url").value = best?.url||"";
+    document.getElementById("archiveSelectedInfo").innerHTML = `
+      <div class="archive-id">📼 ${esc(identifier)}</div>
+      <div style="margin-top:6px;font-size:12px;color:var(--muted)">${files.length} video file(s) · <a href="https://archive.org/details/${identifier}" target="_blank">View on archive.org ↗</a></div>`;
+    document.getElementById("archiveSelected").style.display = "block";
+    if (files.length > 1) {
+      document.getElementById("fileList").style.display = "block";
+      document.getElementById("fileListItems").innerHTML = files.map(f=>`
+        <div onclick="pickFile('${esc(f.url)}',this)" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--card);border-radius:6px;margin-bottom:6px;border:1px solid var(--border);cursor:pointer;font-size:12px">
+          <span style="font-family:monospace;color:var(--muted2)">${esc(f.name)}</span><span style="color:var(--muted)">${f.size}</span>
+        </div>`).join("");
+    }
+    updateFinalPreview();
+    document.getElementById("step4").style.display = "block";
+  } catch(e) { alert("Could not load archive metadata"); }
+}
+function pickFile(url, el) {
+  document.querySelectorAll("#fileListItems div").forEach(d=>d.style.border="1px solid var(--border)");
+  el.style.border = "1px solid var(--gold)";
+  document.getElementById("f_archive_url").value = url;
+  updateFinalPreview();
+}
+async function loadById() {
+  const id = document.getElementById("manualId").value.trim();
+  if (!id) return;
+  await selectArchive(id, null);
+  document.getElementById("f_archive_id2").value = id;
+}
+
+// ── Upload to archive.org ─────────────────────────────────────────────────────
+let videoFile = null;
+function handleFile(f) {
+  if (!f) return;
+  videoFile = f;
+  document.getElementById("filePreview").style.display = "flex";
+  document.getElementById("fileName").textContent = f.name;
+  document.getElementById("fileSize").textContent = (f.size/1024/1024).toFixed(1)+" MB · "+f.type;
+  document.getElementById("uploadBtn").style.display = "inline-flex";
+}
+function clearFile() {
+  videoFile = null;
+  document.getElementById("videoInput").value = "";
+  document.getElementById("filePreview").style.display = "none";
+  document.getElementById("uploadBtn").style.display = "none";
+  document.getElementById("progressWrap").style.display = "none";
+}
+async function startUpload() {
+  if (!videoFile) return alert("Select a video file first");
+  if (!document.getElementById("f_tmdb_id").value) return alert("Find movie on TMDB first");
+  const ARCHIVE_KEY = prompt("Enter your archive.org S3 Access Key (get free at archive.org/account/s3.php):");
+  const ARCHIVE_SEC = prompt("Enter your archive.org S3 Secret Key:");
+  if (!ARCHIVE_KEY || !ARCHIVE_SEC) return;
+
+  const title  = document.getElementById("f_title").value || videoFile.name;
+  const year   = document.getElementById("f_year").value || new Date().getFullYear();
+  const clean  = title.replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,60);
+  const identifier = `EliteMovies_${clean}_${year}_${Date.now()}`;
+  const uploadUrl  = `https://s3.us.archive.org/${identifier}/${videoFile.name}`;
+
+  document.getElementById("progressWrap").style.display = "block";
+  document.getElementById("uploadBtn").disabled = true;
+  document.getElementById("uploadMsg").style.display = "none";
+
+  const xhr = new XMLHttpRequest();
+  xhr.upload.addEventListener("progress", e => {
+    if (!e.lengthComputable) return;
+    const p = Math.round(e.loaded/e.total*100);
+    document.getElementById("progFill").style.width = p+"%";
+    document.getElementById("progPct").textContent = p+"%";
+    document.getElementById("progText").textContent = p<100 ? `Uploading ${(e.loaded/1024/1024).toFixed(1)}/${(e.total/1024/1024).toFixed(1)} MB` : "Processing…";
+  });
+  xhr.addEventListener("load", () => {
+    document.getElementById("uploadBtn").disabled = false;
+    if (xhr.status === 200) {
+      const url = `https://archive.org/download/${identifier}/${videoFile.name}`;
+      document.getElementById("f_archive_id").value  = identifier;
+      document.getElementById("f_archive_url").value = url;
+      showMsg("uploadMsg","success",`✅ Uploaded! Identifier: ${identifier}`);
+      updateFinalPreview();
+      document.getElementById("step4").style.display = "block";
+      document.getElementById("step4").scrollIntoView({behavior:"smooth"});
+    } else {
+      showMsg("uploadMsg","error","❌ Upload failed (HTTP "+xhr.status+"). Check your archive.org keys.");
+    }
+  });
+  xhr.addEventListener("error", () => { document.getElementById("uploadBtn").disabled=false; showMsg("uploadMsg","error","❌ Network error."); });
+  xhr.open("PUT", uploadUrl);
+  xhr.setRequestHeader("Authorization", `LOW ${ARCHIVE_KEY}:${ARCHIVE_SEC}`);
+  xhr.setRequestHeader("x-archive-auto-make-bucket","1");
+  xhr.setRequestHeader("x-archive-meta-mediatype","movies");
+  xhr.setRequestHeader("x-archive-meta-title", title);
+  xhr.setRequestHeader("x-archive-meta-year", year);
+  xhr.setRequestHeader("Content-Type", videoFile.type || "video/mp4");
+  xhr.send(videoFile);
+}
+
+// ── Save movie ────────────────────────────────────────────────────────────────
+function updateFinalPreview() {
+  if (!selectedMovie) return;
+  const poster = selectedMovie.poster_path ? "https://image.tmdb.org/t/p/w185"+selectedMovie.poster_path : "https://placehold.co/72x108/1C1B2E/D4AF37";
+  const archId = document.getElementById("f_archive_id").value || document.getElementById("f_archive_id2").value;
+  document.getElementById("finalPreview").innerHTML = `
+    <img src="${poster}" alt="${esc(selectedMovie.title)}">
+    <div class="final-info">
+      <h3>${esc(selectedMovie.title)}</h3>
+      <p>${document.getElementById("f_year").value} · ⭐ ${selectedMovie.vote_average?.toFixed(1)||"—"}</p>
+      ${archId ? `<div style="margin-top:8px;background:var(--gold-dim);color:var(--gold);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;display:inline-block">📼 ${esc(archId)}</div>` : ""}
+    </div>`;
+}
+async function saveMovie() {
+  if (!selectedMovie) return alert("Find a movie on TMDB first");
+  const archId  = document.getElementById("f_archive_id").value  || document.getElementById("f_archive_id2").value;
+  const archUrl = document.getElementById("f_archive_url").value || document.getElementById("f_archive_url2").value;
+  const payload = {
+    tmdb_id: parseInt(document.getElementById("f_tmdb_id").value),
+    title: document.getElementById("f_title").value,
+    overview: document.getElementById("f_overview").value,
+    poster_path: document.getElementById("f_poster").value,
+    backdrop_path: document.getElementById("f_backdrop").value,
+    release_year: parseInt(document.getElementById("f_year").value)||0,
+    vote_average: parseFloat(document.getElementById("f_rating").value)||0,
+    runtime: parseInt(document.getElementById("f_runtime").value)||0,
+    archive_identifier: archId||null,
+    archive_url: archUrl||null,
+    is_available: document.getElementById("f_available").checked,
+  };
+  const btn = document.getElementById("saveBtn");
+  btn.disabled = true; btn.textContent = "Saving…";
+  const { data, error } = await sb.from("movies").upsert(payload, {onConflict:"tmdb_id"}).select().single();
+  btn.disabled = false;
+  if (error) { showMsg("saveMsg","error","❌ "+error.message); btn.textContent="💾 Save Movie to Elite Movies"; return; }
+  showMsg("saveMsg","success",`✅ <strong>${esc(data.title)}</strong> saved! ${data.is_available ? "Now LIVE in the app." : "Hidden — toggle live from Movies page."}`);
+  btn.textContent = "✅ Saved! Add Another";
+  btn.style.background = "var(--green)";
+  setTimeout(() => { btn.textContent="💾 Save Movie to Elite Movies"; btn.style.background=""; }, 4000);
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+  document.querySelectorAll(".tab-pane").forEach(p=>p.classList.remove("active"));
+  el.classList.add("active");
+  document.getElementById("tab-"+name).classList.add("active");
+}
+
+// ── Drag & drop ───────────────────────────────────────────────────────────────
+const dz = document.getElementById("dropZone");
+dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("dragover");});
+dz.addEventListener("dragleave",()=>dz.classList.remove("dragover"));
+dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("dragover");const f=e.dataTransfer.files[0];if(f&&f.type.startsWith("video/"))handleFile(f);});
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+function renderPag(containerId, cur, total, cb) {
+  const el = document.getElementById(containerId);
+  if (!el || total <= 1) { if(el) el.innerHTML=""; return; }
+  let html = "";
+  if (cur>1) html += `<button class="page-btn" onclick="${cb.name}(${cur-1})">‹</button>`;
+  const s=Math.max(1,cur-2), e2=Math.min(total,cur+2);
+  if (s>1) html += `<button class="page-btn" onclick="${cb.name}(1)">1</button>${s>2?'<span style="padding:0 4px;color:var(--muted)">…</span>':""}`;
+  for(let i=s;i<=e2;i++) html+=`<button class="page-btn ${i===cur?'active':''}" onclick="${cb.name}(${i})">${i}</button>`;
+  if (e2<total) html += `${e2<total-1?'<span style="padding:0 4px;color:var(--muted)">…</span>':""}<button class="page-btn" onclick="${cb.name}(${total})">${total}</button>`;
+  if (cur<total) html+=`<button class="page-btn" onclick="${cb.name}(${cur+1})">›</button>`;
+  el.innerHTML = html;
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function num(n) { return Number(n||0).toLocaleString(); }
+function showMsg(id, type, html) { const el=document.getElementById(id); el.style.display="block"; el.className=`alert alert-${type}`; el.innerHTML=html; }
+function showAlert(id, type, msg) { const el=document.getElementById(id); el.style.display="block"; el.className=`alert alert-${type}`; el.textContent=msg; }
+function debounce(fn, ms) { let t; return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);}; }
+
+// Keep archive fields in sync
+["f_archive_id","f_archive_url"].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener("input",updateFinalPreview);
+});
+</script>
+</body>
+</html>
