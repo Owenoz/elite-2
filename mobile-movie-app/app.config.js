@@ -23,7 +23,7 @@ export default {
         backgroundColor: "#030014",
       },
       package: "com.moviehub.app",
-      versionCode: 1,
+      versionCode: 2,
       permissions: ["INTERNET", "ACCESS_NETWORK_STATE"],
     },
     web: {
