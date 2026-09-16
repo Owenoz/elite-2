@@ -276,23 +276,60 @@ body.login-mode{align-items:center;justify-content:center;}
         <button class="tab-btn" onclick="switchTab('manual',this)">✏️ Manual ID</button>
       </div>
       <div class="tab-pane active" id="tab-upload">
+
+        <!-- Archive.org S3 Key Setup -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:700;color:var(--muted2)">🔑 Archive.org S3 Keys</div>
+            <a href="https://archive.org/account/s3.php" target="_blank" class="btn btn-sm btn-outline">Get Free Keys ↗</a>
+          </div>
+          <!-- Saved state -->
+          <div id="credSaved" style="display:none;background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <span style="color:#4ade80;font-size:13px">✅ Keys saved — Access Key: <strong id="credSavedKey"></strong></span>
+            <button onclick="clearCredentials()" class="btn btn-sm btn-outline" style="color:var(--muted)">Change</button>
+          </div>
+          <!-- Entry form -->
+          <div id="credForm">
+            <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+              Required to upload videos. Get your free keys at
+              <a href="https://archive.org/account/s3.php" target="_blank">archive.org/account/s3.php</a>.
+              Keys are saved in your browser only.
+            </p>
+            <div class="form-grid" style="margin-bottom:10px">
+              <div class="field"><label>S3 Access Key</label><input class="input" id="archKey" placeholder="e.g. xxxxxxxxxxxx"></div>
+              <div class="field"><label>S3 Secret Key</label><input class="input" id="archSec" type="password" placeholder="e.g. xxxxxxxxxxxx"></div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="saveCredentials()">💾 Save Keys</button>
+          </div>
+        </div>
+
+        <!-- Drop zone -->
         <div class="drop-zone" id="dropZone" onclick="document.getElementById('videoInput').click()">
           <div style="font-size:36px;margin-bottom:10px">🎬</div>
           <h4>Drop video file here</h4>
           <p>MP4, MKV, AVI, MOV — Max 4 GB</p>
           <input type="file" id="videoInput" accept="video/*" style="display:none" onchange="handleFile(this.files[0])">
         </div>
-        <div id="filePreview" style="display:none;margin-top:12px;background:var(--bg2);border-radius:10px;padding:12px 16px;display:none;align-items:center;gap:12px;border:1px solid var(--border)">
+
+        <div id="filePreview" style="display:none;margin-top:12px;background:var(--bg2);border-radius:10px;padding:12px 16px;align-items:center;gap:12px;border:1px solid var(--border)">
           <span style="font-size:28px">🎞️</span>
           <div><div id="fileName" style="font-weight:700"></div><div id="fileSize" style="font-size:11px;color:var(--muted);margin-top:2px"></div></div>
           <button onclick="clearFile()" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px">✕</button>
         </div>
+
         <div class="progress-wrap" id="progressWrap">
           <div class="prog-bg"><div class="prog-fill" id="progFill"></div></div>
           <div class="prog-label"><span id="progText">Uploading to archive.org…</span><span id="progPct">0%</span></div>
         </div>
         <div id="uploadMsg" style="display:none;margin-top:12px"></div>
         <button class="btn btn-gold mt-4" id="uploadBtn" onclick="startUpload()" style="display:none">📤 Upload to Archive.org</button>
+
+        <!-- Alternative: direct upload link -->
+        <div style="margin-top:16px;padding:12px 14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border);font-size:12px;color:var(--muted)">
+          💡 <strong style="color:var(--muted2)">Alternative:</strong> Upload directly at
+          <a href="https://archive.org/upload" target="_blank">archive.org/upload ↗</a>,
+          then paste the identifier in the <strong>Manual ID</strong> tab.
+        </div>
       </div>
       <div class="tab-pane" id="tab-search">
         <div class="row" style="margin-bottom:14px">
@@ -710,6 +747,27 @@ async function loadById() {
 
 // ── Upload to archive.org ─────────────────────────────────────────────────────
 let videoFile = null;
+// Saved archive.org credentials (persisted in localStorage)
+let archiveCredentials = JSON.parse(localStorage.getItem("elite_archive_creds") || "null");
+
+// Restore credential UI if already saved
+(function restoreCredUI() {
+  if (!archiveCredentials) return;
+  const tryShow = () => {
+    const cf = document.getElementById("credForm");
+    const cs = document.getElementById("credSaved");
+    const ck = document.getElementById("credSavedKey");
+    if (cf && cs && ck) {
+      cf.style.display = "none";
+      cs.style.display = "flex";
+      ck.textContent = archiveCredentials.key.slice(0,6) + "…";
+    } else {
+      setTimeout(tryShow, 200);
+    }
+  };
+  tryShow();
+})();
+
 function handleFile(f) {
   if (!f) return;
   videoFile = f;
@@ -717,6 +775,9 @@ function handleFile(f) {
   document.getElementById("fileName").textContent = f.name;
   document.getElementById("fileSize").textContent = (f.size/1024/1024).toFixed(1)+" MB · "+f.type;
   document.getElementById("uploadBtn").style.display = "inline-flex";
+  // Show credential hint if not set
+  const hint = document.getElementById("credHint");
+  if (hint) hint.style.display = archiveCredentials ? "none" : "block";
 }
 function clearFile() {
   videoFile = null;
@@ -724,53 +785,108 @@ function clearFile() {
   document.getElementById("filePreview").style.display = "none";
   document.getElementById("uploadBtn").style.display = "none";
   document.getElementById("progressWrap").style.display = "none";
+  const hint = document.getElementById("credHint");
+  if (hint) hint.style.display = "none";
 }
+
+function saveCredentials() {
+  const key = document.getElementById("archKey").value.trim();
+  const sec = document.getElementById("archSec").value.trim();
+  if (!key || !sec) return alert("Enter both Access Key and Secret Key");
+  archiveCredentials = { key, sec };
+  localStorage.setItem("elite_archive_creds", JSON.stringify(archiveCredentials));
+  document.getElementById("credForm").style.display = "none";
+  document.getElementById("credSaved").style.display = "block";
+  document.getElementById("credSavedKey").textContent = key.slice(0,6) + "…";
+}
+function clearCredentials() {
+  archiveCredentials = null;
+  localStorage.removeItem("elite_archive_creds");
+  document.getElementById("credForm").style.display = "block";
+  document.getElementById("credSaved").style.display = "none";
+  document.getElementById("archKey").value = "";
+  document.getElementById("archSec").value = "";
+}
+
 async function startUpload() {
   if (!videoFile) return alert("Select a video file first");
-  if (!document.getElementById("f_tmdb_id").value) return alert("Find movie on TMDB first");
-  const ARCHIVE_KEY = prompt("Enter your archive.org S3 Access Key (get free at archive.org/account/s3.php):");
-  const ARCHIVE_SEC = prompt("Enter your archive.org S3 Secret Key:");
-  if (!ARCHIVE_KEY || !ARCHIVE_SEC) return;
+  if (!document.getElementById("f_tmdb_id").value) return alert("Find movie on TMDB first (Step 1)");
 
+  // Ask for credentials if not saved
+  if (!archiveCredentials) {
+    document.getElementById("credForm").style.display = "block";
+    document.getElementById("credForm").scrollIntoView({behavior:"smooth"});
+    return alert("Please enter your Archive.org S3 keys first (shown above), then click Upload again.");
+  }
+
+  const { key: ARCHIVE_KEY, sec: ARCHIVE_SEC } = archiveCredentials;
   const title  = document.getElementById("f_title").value || videoFile.name;
   const year   = document.getElementById("f_year").value || new Date().getFullYear();
   const clean  = title.replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,60);
   const identifier = `EliteMovies_${clean}_${year}_${Date.now()}`;
-  const uploadUrl  = `https://s3.us.archive.org/${identifier}/${videoFile.name}`;
+
+  // Archive.org S3-like API — use no-CORS mode by uploading via fetch with correct headers
+  // Note: archive.org requires the bucket (identifier) to be created first, then the file PUT
+  const uploadUrl = `https://s3.us.archive.org/${identifier}/${encodeURIComponent(videoFile.name)}`;
 
   document.getElementById("progressWrap").style.display = "block";
   document.getElementById("uploadBtn").disabled = true;
   document.getElementById("uploadMsg").style.display = "none";
 
   const xhr = new XMLHttpRequest();
+
   xhr.upload.addEventListener("progress", e => {
     if (!e.lengthComputable) return;
-    const p = Math.round(e.loaded/e.total*100);
-    document.getElementById("progFill").style.width = p+"%";
-    document.getElementById("progPct").textContent = p+"%";
-    document.getElementById("progText").textContent = p<100 ? `Uploading ${(e.loaded/1024/1024).toFixed(1)}/${(e.total/1024/1024).toFixed(1)} MB` : "Processing…";
+    const p = Math.round(e.loaded / e.total * 100);
+    document.getElementById("progFill").style.width = p + "%";
+    document.getElementById("progPct").textContent = p + "%";
+    document.getElementById("progText").textContent =
+      p < 100
+        ? `Uploading… ${(e.loaded/1024/1024).toFixed(1)} / ${(e.total/1024/1024).toFixed(1)} MB`
+        : "Processing on archive.org…";
   });
+
   xhr.addEventListener("load", () => {
     document.getElementById("uploadBtn").disabled = false;
-    if (xhr.status === 200) {
+    if (xhr.status >= 200 && xhr.status < 300) {
       const url = `https://archive.org/download/${identifier}/${videoFile.name}`;
       document.getElementById("f_archive_id").value  = identifier;
       document.getElementById("f_archive_url").value = url;
-      showMsg("uploadMsg","success",`✅ Uploaded! Identifier: ${identifier}`);
+      showMsg("uploadMsg","success",`✅ Upload complete! Identifier: <strong>${identifier}</strong><br><small style="opacity:.7">It may take a few minutes to process on archive.org before it streams.</small>`);
       updateFinalPreview();
       document.getElementById("step4").style.display = "block";
       document.getElementById("step4").scrollIntoView({behavior:"smooth"});
+    } else if (xhr.status === 403) {
+      showMsg("uploadMsg","error",
+        `❌ <strong>HTTP 403 — Access Denied</strong><br>
+        Your Archive.org S3 keys are wrong or your account isn't verified.<br>
+        <a href="https://archive.org/account/s3.php" target="_blank" style="color:var(--gold)">→ Get your S3 keys here</a> &nbsp;|&nbsp;
+        <a href="https://help.archive.org/hc/en-us/articles/360004050011" target="_blank" style="color:var(--gold)">→ Verify your account</a><br>
+        <button onclick="clearCredentials()" class="btn btn-sm btn-outline" style="margin-top:8px">🔑 Update Keys</button>`
+      );
+    } else if (xhr.status === 401) {
+      showMsg("uploadMsg","error",`❌ HTTP 401 — Invalid credentials. <button onclick="clearCredentials()" class="btn btn-sm btn-outline" style="margin-top:8px">🔑 Update Keys</button>`);
     } else {
-      showMsg("uploadMsg","error","❌ Upload failed (HTTP "+xhr.status+"). Check your archive.org keys.");
+      showMsg("uploadMsg","error",`❌ Upload failed (HTTP ${xhr.status}). Response: ${xhr.responseText.slice(0,200)}`);
     }
   });
-  xhr.addEventListener("error", () => { document.getElementById("uploadBtn").disabled=false; showMsg("uploadMsg","error","❌ Network error."); });
+
+  xhr.addEventListener("error", () => {
+    document.getElementById("uploadBtn").disabled = false;
+    showMsg("uploadMsg","error",
+      `❌ Network / CORS error.<br>
+      Archive.org S3 may be blocking browser uploads from this domain.<br>
+      <strong>Alternative:</strong> Use the <em>Search Archive.org</em> tab to link an existing video, or the <em>Manual ID</em> tab to paste an identifier you uploaded via <a href="https://archive.org/upload" target="_blank" style="color:var(--gold)">archive.org/upload ↗</a>`
+    );
+  });
+
   xhr.open("PUT", uploadUrl);
   xhr.setRequestHeader("Authorization", `LOW ${ARCHIVE_KEY}:${ARCHIVE_SEC}`);
-  xhr.setRequestHeader("x-archive-auto-make-bucket","1");
-  xhr.setRequestHeader("x-archive-meta-mediatype","movies");
+  xhr.setRequestHeader("x-archive-auto-make-bucket", "1");
+  xhr.setRequestHeader("x-archive-meta-mediatype", "movies");
   xhr.setRequestHeader("x-archive-meta-title", title);
-  xhr.setRequestHeader("x-archive-meta-year", year);
+  xhr.setRequestHeader("x-archive-meta-year", String(year));
+  xhr.setRequestHeader("x-archive-meta-subject", "EliteMovies");
   xhr.setRequestHeader("Content-Type", videoFile.type || "video/mp4");
   xhr.send(videoFile);
 }
