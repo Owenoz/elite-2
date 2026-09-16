@@ -1,7 +1,7 @@
 export default {
   expo: {
     name: "Elite Movies",
-    slug: "moviehub-app",
+    slug: "elite-movies-app",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
