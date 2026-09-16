@@ -7,13 +7,20 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const SESSION_KEY = "elite_user_email";
+const SESSION_KEY     = "elite_user_email";
 const SESSION_NAME_KEY = "elite_user_name";
+const SESSION_VIP_KEY  = "elite_user_vip";
+
+// ── VIP account — bypasses all payments ──────────────────────────────────────
+export const VIP_EMAIL    = "admin@elitemovies.com";
+export const VIP_PASSWORD = "EliteVIP2024!";
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface User {
     $id: string;   // we use email as the ID
     email: string;
     name: string;
+    isVip: boolean;
 }
 
 interface UserProfile {
@@ -28,7 +35,8 @@ interface AuthContextType {
     userProfile: UserProfile | null;
     loading: boolean;
     isAuthenticated: boolean;
-    setSessionEmail: (email: string, name?: string) => Promise<void>;
+    isVip: boolean;
+    setSessionEmail: (email: string, name?: string, vip?: boolean) => Promise<void>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
 }
@@ -38,6 +46,7 @@ const AuthContext = createContext<AuthContextType>({
     userProfile: null,
     loading: true,
     isAuthenticated: false,
+    isVip: false,
     setSessionEmail: async () => {},
     logout: async () => {},
     refreshUser: async () => {},
@@ -54,10 +63,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading]         = useState(true);
 
-    const buildUserFromEmail = (email: string, name?: string): User => ({
+    const buildUserFromEmail = (email: string, name?: string, vip = false): User => ({
         $id:   email,
         email: email,
         name:  name || email.split("@")[0],
+        isVip: vip,
     });
 
     const buildProfile = (email: string, name?: string): UserProfile => ({
@@ -73,8 +83,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             const email = await AsyncStorage.getItem(SESSION_KEY);
             const name  = await AsyncStorage.getItem(SESSION_NAME_KEY) ?? undefined;
+            const vip   = (await AsyncStorage.getItem(SESSION_VIP_KEY)) === "1";
             if (email) {
-                setUser(buildUserFromEmail(email, name));
+                setUser(buildUserFromEmail(email, name, vip));
                 setUserProfile(buildProfile(email, name));
             }
         } catch (e) {
@@ -87,17 +98,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => { loadUser(); }, []);
 
     /** Called after OTP payment verification — stores email as session */
-    const setSessionEmail = async (email: string, name?: string) => {
+    const setSessionEmail = async (email: string, name?: string, vip = false) => {
         const lc = email.toLowerCase();
         await AsyncStorage.setItem(SESSION_KEY, lc);
         if (name) await AsyncStorage.setItem(SESSION_NAME_KEY, name);
-        setUser(buildUserFromEmail(lc, name));
+        await AsyncStorage.setItem(SESSION_VIP_KEY, vip ? "1" : "0");
+        setUser(buildUserFromEmail(lc, name, vip));
         setUserProfile(buildProfile(lc, name));
     };
 
     const logout = async () => {
         await AsyncStorage.removeItem(SESSION_KEY);
         await AsyncStorage.removeItem(SESSION_NAME_KEY);
+        await AsyncStorage.removeItem(SESSION_VIP_KEY);
         setUser(null);
         setUserProfile(null);
     };
@@ -108,6 +121,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         <AuthContext.Provider value={{
             user, userProfile, loading,
             isAuthenticated: !!user,
+            isVip: user?.isVip ?? false,
             setSessionEmail, logout, refreshUser,
         }}>
             {children}

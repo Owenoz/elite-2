@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 import { icons } from "@/constants/icons";
 import useFetch from "../../services/useFetch";
@@ -51,6 +52,7 @@ const MovieInfo = ({ label, value }: MovieInfoProps) => (
 const Details = () => {
     const router = useRouter();
     const { id } = useLocalSearchParams();
+    const { isVip } = useAuth();
     const [isFavorite, setIsFavorite] = useState(false);
     const [isDownloaded, setIsDownloaded] = useState(false);
     const [favoriteLoading, setFavoriteLoading] = useState(false);
@@ -88,6 +90,13 @@ const Details = () => {
                     setEliteMovie(em);
                     setArchiveIdentifier(em.archive_identifier);
                     setArchiveUrl(em.archive_url);
+
+                    // VIP users get instant access — no payment needed
+                    if (isVip) {
+                        setIsDownloaded(true);
+                        return;
+                    }
+
                     // Check if already downloaded locally
                     const localUri = await isDownloadedLocally(em.tmdb_id);
                     if (localUri) {
@@ -256,20 +265,25 @@ const Details = () => {
                         <Text style={styles.ratingVotes}>
                             ({movie?.vote_count?.toLocaleString()} votes)
                         </Text>
+                        {isVip && (
+                            <View style={styles.vipBadge}>
+                                <Text style={styles.vipBadgeText}>👑 VIP</Text>
+                            </View>
+                        )}
                     </View>
 
                     {/* Action Buttons */}
                     <View style={styles.actionRow}>
                         {/* Watch Movie — primary action, always shown for catalogue movies */}
                         {isDownloaded && archiveIdentifier ? (
-                            /* Already paid — watch immediately */
+                            /* Already paid (or VIP) — watch immediately */
                             <TouchableOpacity
                                 style={[styles.actionBtn, styles.watchBtn]}
                                 onPress={() => setMoviePlayerVisible(true)}
                             >
                                 <Image source={icons.play} style={[styles.iconSm, { marginRight: 8 }]} tintColor="#fff" />
                                 <Text style={styles.actionBtnText}>
-                                    {localVideoUri ? "▶ Watch Offline" : "▶ Watch Movie"}
+                                    {isVip ? "▶ Watch Free (VIP)" : localVideoUri ? "▶ Watch Offline" : "▶ Watch Movie"}
                                 </Text>
                             </TouchableOpacity>
                         ) : archiveIdentifier ? (
@@ -459,6 +473,12 @@ const styles = StyleSheet.create({
     },
     ratingScore: { color: COLORS.white, fontWeight: "700", fontSize: 15, marginRight: 6 },
     ratingVotes: { color: COLORS.light200, fontSize: 12 },
+    vipBadge: {
+        marginLeft: 10, backgroundColor: "rgba(212,175,55,0.18)",
+        borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2,
+        borderWidth: 1, borderColor: "rgba(212,175,55,0.4)",
+    },
+    vipBadgeText: { color: "#D4AF37", fontSize: 11, fontWeight: "800" },
     actionRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
     actionBtn: {
         flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
