@@ -7,6 +7,7 @@ import useFetch from "../../services/useFetch";
 import { icons } from "@/constants/icons";
 import { images } from "@/constants/images";
 import SearchBar from "@/components/SearchBar";
+import WelcomeModal from "@/components/WelcomeModal";
 import { getAvailableMovies, getTrending, type EliteMovie, type TrendingSearch } from "@/services/eliteApi";
 
 // ── EliteMovieCard — uses your DB poster_path (TMDB format) ──────────────────
@@ -99,6 +100,9 @@ const Index = () => {
     return (
         <View style={S.root}>
             <Image source={images.bg} style={S.bgAbs} resizeMode="cover" />
+
+            {/* Welcome popup — shows once on first open */}
+            <WelcomeModal />
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
 
