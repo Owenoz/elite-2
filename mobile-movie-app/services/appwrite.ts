@@ -1,16 +1,21 @@
 import { Client, Databases, ID, Query, Account } from "react-native-appwrite";
 
-// Environment variables for Appwrite configuration
-const DATABASE_ID = process.env.EXPO_PUBLIC_APPWRITE_DATABASE_ID!;
-const COLLECTION_ID = process.env.EXPO_PUBLIC_APPWRITE_COLLECTION_ID!;
-const USERS_COLLECTION_ID = process.env.EXPO_PUBLIC_APPWRITE_USERS_COLLECTION_ID!;
-const FAVORITES_COLLECTION_ID = process.env.EXPO_PUBLIC_APPWRITE_FAVORITES_COLLECTION_ID!;
-const DOWNLOADS_COLLECTION_ID = process.env.EXPO_PUBLIC_APPWRITE_DOWNLOADS_COLLECTION_ID!;
+// ─── Appwrite configuration ───────────────────────────────────────────────────
+// Values are hardcoded here so they are always embedded in the JS bundle.
+// process.env.EXPO_PUBLIC_* works in local dev but EAS secrets are NOT
+// injected into the client bundle — hardcoding is required for production APKs.
+const APPWRITE_ENDPOINT  = "https://cloud.appwrite.io/v1";
+const APPWRITE_PROJECT   = process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID   ?? "686aeb1b003344a33beb";
+const DATABASE_ID        = process.env.EXPO_PUBLIC_APPWRITE_DATABASE_ID  ?? "686c3f460005c8471e94";
+const COLLECTION_ID      = process.env.EXPO_PUBLIC_APPWRITE_COLLECTION_ID             ?? "686c3f81001fba212ce7";
+const USERS_COLLECTION_ID      = process.env.EXPO_PUBLIC_APPWRITE_USERS_COLLECTION_ID     ?? "686c3f81001fba212ce8";
+const FAVORITES_COLLECTION_ID  = process.env.EXPO_PUBLIC_APPWRITE_FAVORITES_COLLECTION_ID ?? "686c3f81001fba212ce9";
+const DOWNLOADS_COLLECTION_ID  = process.env.EXPO_PUBLIC_APPWRITE_DOWNLOADS_COLLECTION_ID ?? "686c3f81001fba212c10";
 
 // Initialize the Appwrite client
 const client = new Client()
-    .setEndpoint("https://cloud.appwrite.io/v1")
-    .setProject(process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID!);
+    .setEndpoint(APPWRITE_ENDPOINT)
+    .setProject(APPWRITE_PROJECT);
 
 // Initialize the Appwrite database service
 const database = new Databases(client);
