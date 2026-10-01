@@ -1,0 +1,14 @@
+node_modules
+.git
+Downloads
+android
+ios
+*.log
+*.orig
+.expo
+dist
+web-build
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

@@ -38,10 +38,10 @@ export default function Onboarding() {
                         resizeMode="contain"
                     />
                     <Text className="text-white text-4xl font-bold text-center mb-4">
-                        Welcome to{"\n"}MovieHub
+                        Welcome to{"\n"}GEN Z CORNER
                     </Text>
                     <Text className="text-light-200 text-base text-center px-4">
-                        Discover, save and track your favorite movies all in one place
+                        Discover, save and watch your favorite movies — including Uganda VJ translated films
                     </Text>
                 </View>
 

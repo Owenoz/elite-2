@@ -176,3 +176,56 @@ export const fetchMovieVideos = async (movieId: string) => {
         throw error;
     }
 };
+
+// Fetch top rated movies
+export const fetchTopRatedMovies = async () => {
+    try {
+        const response = await fetch(
+            `${TMDB_CONFIG.BASE_URL}/movie/top_rated?language=en-US&page=1`,
+            { method: "GET", headers: TMDB_CONFIG.headers }
+        );
+        if (!response.ok) throw new Error(`Failed to fetch top rated movies: ${response.statusText}`);
+        const data = await response.json();
+        return data.results;
+    } catch (error) {
+        console.error("Error fetching top rated movies:", error);
+        throw error;
+    }
+};
+
+// Fetch upcoming movies
+export const fetchUpcomingMovies = async () => {
+    try {
+        const response = await fetch(
+            `${TMDB_CONFIG.BASE_URL}/movie/upcoming?language=en-US&page=1`,
+            { method: "GET", headers: TMDB_CONFIG.headers }
+        );
+        if (!response.ok) throw new Error(`Failed to fetch upcoming movies: ${response.statusText}`);
+        const data = await response.json();
+        return data.results;
+    } catch (error) {
+        console.error("Error fetching upcoming movies:", error);
+        throw error;
+    }
+};
+
+// Fetch now playing movies
+export const fetchNowPlayingMovies = async () => {
+    try {
+        const response = await fetch(
+            `${TMDB_CONFIG.BASE_URL}/movie/now_playing?language=en-US&page=1`,
+            { method: "GET", headers: TMDB_CONFIG.headers }
+        );
+        if (!response.ok) throw new Error(`Failed to fetch now playing movies: ${response.statusText}`);
+        const data = await response.json();
+        return data.results;
+    } catch (error) {
+        console.error("Error fetching now playing movies:", error);
+        throw error;
+    }
+};
+
+// Build VidSrc embed URL from a TMDB movie ID
+export const getVidSrcEmbedUrl = (tmdbId: number | string): string => {
+    return `https://vidsrc.io/embed/movie/${tmdbId}`;
+};

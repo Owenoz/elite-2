@@ -14,14 +14,14 @@ const TabIcon = ({focused, icon, title}: any) => {
         return (
             <ImageBackground
                 source={images.highlight}
-                className="flex flex-row w-full flex-1 min-w-[112px] min-h-16 mt-4 justify-center items-center rounded-full overflow-hidden"
+                className="flex flex-row w-full flex-1 min-w-[80px] min-h-16 mt-4 justify-center items-center rounded-full overflow-hidden"
             >
                 <Image
                     source={icon}
                     tintColor="#151312" // Set a dark color for the icon on a light background
                     className="size-5"
                 />
-                <Text className="text-secondary text-base font-semibold">{title}</Text>
+                <Text className="text-secondary text-sm font-semibold ml-1">{title}</Text>
             </ImageBackground>
         )
     }
@@ -53,11 +53,11 @@ const TabsLayout = () => {
                 },
                 // Style for the tab bar container
                 tabBarStyle: {
-                    backgroundColor: "#0F0D23", // Dark background color
+                    backgroundColor: "#0F0D23",
                     borderRadius: 50,
-                    marginHorizontal: 20,
-                    marginBottom: 36,
-                    height: 52,
+                    marginHorizontal: 10,
+                    marginBottom: 28,
+                    height: 56,
                     position: "absolute",
                     overflow: "hidden",
                     borderWidth: 1,
@@ -119,6 +119,20 @@ const TabsLayout = () => {
                             focused={focused}
                             icon={icons.person}
                             title="Profile"
+                        />
+                    )
+                }}
+            />
+            <Tabs.Screen
+                name="sports"
+                options={{
+                    title: 'Sports',
+                    headerShown: false,
+                    tabBarIcon: ({focused}) => (
+                        <TabIcon
+                            focused={focused}
+                            icon={icons.play}
+                            title="Sports"
                         />
                     )
                 }}

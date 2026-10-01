@@ -1,42 +1,55 @@
 {
   "expo": {
-    "name": "MovieTrophies",
-    "slug": "mobile_movie_app-main",
-    "version": "1.0.0",
+    "name": "GEN Z CORNER",
+    "slug": "gen-z-corner",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
-    "scheme": "mobilemovieappmain",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "icon": "./assets/images/icon.png",
+    "scheme": "genzcorner",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": false,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#030014"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.genzcorner.app"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#030014"
       },
-      "edgeToEdgeEnabled": true
+      "package": "com.genzcorner.app",
+      "edgeToEdgeEnabled": false
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/logo.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo.png",
+          "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#030014"
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6ed314c0-9920-4c84-8a8b-1a9bce9cc93d"
+      }
     }
   }
 }

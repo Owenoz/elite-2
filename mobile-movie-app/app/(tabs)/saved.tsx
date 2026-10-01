@@ -43,7 +43,7 @@ const Saved = () => {
         try {
             setError(null);
             const favs = await getFavorites(user.$id);
-            setFavorites(favs as FavoriteMovie[]);
+            setFavorites(favs as unknown as FavoriteMovie[]);
         } catch (error) {
             console.error("Error loading favorites:", error);
             setError("Failed to load saved movies");

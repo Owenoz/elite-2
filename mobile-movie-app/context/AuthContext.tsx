@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 // Load user profile
                 const profile = await getUserProfile(currentUser.$id);
                 if (profile) {
-                    setUserProfile(profile as UserProfile);
+                    setUserProfile(profile as unknown as UserProfile);
                 }
             } else {
                 setUser(null);

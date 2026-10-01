@@ -8,9 +8,9 @@ import {
     FlatList,
     Alert,
     Linking,
+    Dimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useEffect } from "react";
 
 import { icons } from "@/constants/icons";
@@ -32,53 +32,46 @@ import {
 import CastCard from "@/components/CastCard";
 import MovieCard from "@/components/MovieCard";
 
-// Defines the props for the reusable MovieInfo component.
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 interface MovieInfoProps {
     label: string;
     value?: string | number | null;
 }
-
-// A reusable component to display a label and its corresponding value.
 const MovieInfo = ({ label, value }: MovieInfoProps) => (
     <View className="flex-col items-start justify-center mt-5">
         <Text className="text-light-200 font-normal text-sm">{label}</Text>
-        <Text className="text-light-100 font-bold text-sm mt-2">
-            {value || "N/A"}
-        </Text>
+        <Text className="text-light-100 font-bold text-sm mt-2">{value || "N/A"}</Text>
     </View>
 );
 
+// ── Component ─────────────────────────────────────────────────────────────────
 const Details = () => {
     const router = useRouter();
     const { user } = useAuth();
     const { id } = useLocalSearchParams();
+
     const [isFavorite, setIsFavorite] = useState(false);
     const [isDownloaded, setIsDownloaded] = useState(false);
     const [favoriteLoading, setFavoriteLoading] = useState(false);
     const [downloadLoading, setDownloadLoading] = useState(false);
 
-    // Fetch movie details, credits, similar movies, and videos
     const { data: movie, loading: movieLoading } = useFetch(() =>
         fetchMovieDetails(id as string)
     );
-    const { data: credits, loading: creditsLoading } = useFetch(() =>
-        fetchMovieCredits(id as string)
-    );
-    const { data: similarMovies, loading: similarLoading } = useFetch(() =>
-        fetchSimilarMovies(id as string)
-    );
-    const { data: videos, loading: videosLoading } = useFetch(() =>
-        fetchMovieVideos(id as string)
-    );
+    const { data: credits } = useFetch(() => fetchMovieCredits(id as string));
+    const { data: similarMovies } = useFetch(() => fetchSimilarMovies(id as string));
+    const { data: videos } = useFetch(() => fetchMovieVideos(id as string));
 
-    // Check if movie is favorited and downloaded
     useEffect(() => {
         const checkStatuses = async () => {
             if (user && movie) {
-                const favorited = await isMovieFavorited(user.$id, movie.id);
+                const [favorited, downloaded] = await Promise.all([
+                    isMovieFavorited(user.$id, movie.id),
+                    isMovieDownloaded(user.$id, movie.id),
+                ]);
                 setIsFavorite(favorited);
-                
-                const downloaded = await isMovieDownloaded(user.$id, movie.id);
                 setIsDownloaded(downloaded);
             }
         };
@@ -90,15 +83,12 @@ const Details = () => {
             Alert.alert("Login Required", "Please login to save favorites");
             return;
         }
-
         if (!movie) return;
-
         setFavoriteLoading(true);
         try {
             if (isFavorite) {
                 await removeFromFavorites(user.$id, movie.id);
                 setIsFavorite(false);
-                Alert.alert("Success", "Removed from favorites");
             } else {
                 await addToFavorites(user.$id, {
                     id: movie.id,
@@ -108,9 +98,8 @@ const Details = () => {
                     vote_average: movie.vote_average,
                 } as Movie);
                 setIsFavorite(true);
-                Alert.alert("Success", "Added to favorites");
             }
-        } catch (error) {
+        } catch {
             Alert.alert("Error", "Failed to update favorites");
         } finally {
             setFavoriteLoading(false);
@@ -118,21 +107,12 @@ const Details = () => {
     };
 
     const handleDownload = async () => {
-        if (!user) {
-            Alert.alert("Login Required", "Please login to download movies");
-            return;
-        }
-
+        if (!user) { Alert.alert("Login Required", "Please login to download movies"); return; }
         if (!movie) return;
-
-        if (isDownloaded) {
-            Alert.alert("Already Downloaded", "This movie is already in your downloads");
-            return;
-        }
-
+        if (isDownloaded) { Alert.alert("Already Downloaded", "This movie is already in your downloads"); return; }
         Alert.alert(
             "Download Movie",
-            "This feature simulates downloading. In a real app, you would need proper licensing and download infrastructure.",
+            "This simulates downloading. Real downloads require proper licensing.",
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -140,24 +120,15 @@ const Details = () => {
                     onPress: async () => {
                         setDownloadLoading(true);
                         try {
-                            // Simulate download process
-                            await new Promise((resolve) => setTimeout(resolve, 2000));
-                            
+                            await new Promise((r) => setTimeout(r, 2000));
                             await addToDownloads(
                                 user.$id,
-                                {
-                                    id: movie.id,
-                                    title: movie.title,
-                                    poster_path: movie.poster_path,
-                                    release_date: movie.release_date,
-                                    vote_average: movie.vote_average,
-                                } as Movie,
+                                { id: movie.id, title: movie.title, poster_path: movie.poster_path, release_date: movie.release_date, vote_average: movie.vote_average } as Movie,
                                 "downloaded://movie/" + movie.id
                             );
-                            
                             setIsDownloaded(true);
-                            Alert.alert("Success", "Movie downloaded successfully!");
-                        } catch (error) {
+                            Alert.alert("Success", "Movie saved to downloads!");
+                        } catch {
                             Alert.alert("Error", "Failed to download movie");
                         } finally {
                             setDownloadLoading(false);
@@ -169,71 +140,82 @@ const Details = () => {
     };
 
     const handlePlayTrailer = async () => {
-        if (!videos || videos.length === 0) {
-            Alert.alert("No Trailer", "No trailer available for this movie");
-            return;
-        }
-
-        // Find the first trailer or teaser
-        const trailer = videos.find(
-            (v: any) => v.type === "Trailer" || v.type === "Teaser"
-        );
-
-        if (!trailer) {
-            Alert.alert("No Trailer", "No trailer available for this movie");
-            return;
-        }
-
-        const youtubeUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
-
-        try {
-            const supported = await Linking.canOpenURL(youtubeUrl);
-
-            if (supported) {
-                await Linking.openURL(youtubeUrl);
-            } else {
-                Alert.alert("Error", "Cannot open YouTube video");
-            }
-        } catch (error) {
-            Alert.alert("Error", "Failed to open trailer");
-        }
+        const trailer = videos?.find((v: any) => v.type === "Trailer" || v.type === "Teaser");
+        if (!trailer) { Alert.alert("No Trailer", "No trailer available for this movie"); return; }
+        const url = `https://www.youtube.com/watch?v=${trailer.key}`;
+        const supported = await Linking.canOpenURL(url);
+        if (supported) await Linking.openURL(url);
+        else Alert.alert("Error", "Cannot open YouTube");
     };
 
-    const loading = movieLoading || creditsLoading || similarLoading || videosLoading;
+    const handleWatchNow = () => {
+        if (!movie) return;
+        router.push(`/watch/${movie.id}?title=${encodeURIComponent(movie.title)}`);
+    };
 
-    if (loading && !movie) {
+    if (movieLoading && !movie) {
         return (
-            <SafeAreaView className="bg-primary flex-1 justify-center items-center">
+            <View className="bg-primary flex-1 justify-center items-center">
                 <ActivityIndicator size="large" color="#AB8BFF" />
-            </SafeAreaView>
+            </View>
         );
     }
 
     return (
         <View className="bg-primary flex-1">
-            <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-                {/* Header Image with Gradient Overlay */}
-                <View className="relative">
+            <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+                {/* ── Hero image ─────────────────────────────────── */}
+                <View style={{ position: "relative" }}>
                     <Image
                         source={{
-                            uri: `https://image.tmdb.org/t/p/w500${movie?.backdrop_path || movie?.poster_path}`,
+                            uri: `https://image.tmdb.org/t/p/w780${
+                                movie?.backdrop_path || movie?.poster_path
+                            }`,
                         }}
-                        className="w-full h-[400px]"
+                        style={{ width: "100%", height: 340 }}
                         resizeMode="cover"
                     />
-                    {/* Back Button */}
+
+                    {/* Gradient scrim at bottom of hero */}
+                    <View
+                        style={{
+                            position: "absolute",
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: 160,
+                            backgroundColor: "rgba(3,0,20,0.0)",
+                        }}
+                        pointerEvents="none"
+                    />
+                    {/* Strong bottom fade */}
+                    <View
+                        style={{
+                            position: "absolute",
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: 80,
+                            backgroundColor: "#030014",
+                            opacity: 0.9,
+                        }}
+                        pointerEvents="none"
+                    />
+
+                    {/* Back button */}
                     <TouchableOpacity
                         onPress={router.back}
                         className="absolute top-12 left-5 bg-dark-100/80 p-2 rounded-full"
                     >
                         <Image
                             source={icons.arrow}
-                            className="size-6 rotate-180"
+                            className="size-6"
+                            style={{ transform: [{ rotate: "180deg" }] }}
                             tintColor="#fff"
                         />
                     </TouchableOpacity>
 
-                    {/* Favorite Button */}
+                    {/* Favourite button */}
                     <TouchableOpacity
                         onPress={handleFavoriteToggle}
                         disabled={favoriteLoading}
@@ -247,93 +229,97 @@ const Details = () => {
                     </TouchableOpacity>
                 </View>
 
-                {/* Main content area for movie details */}
-                <View className="flex-col items-start justify-center mt-5 px-5">
-                    <Text className="text-white font-bold text-2xl">{movie?.title}</Text>
-
-                    {movie?.tagline && (
-                        <Text className="text-light-200 text-sm italic mt-2">
+                {/* ── Content ────────────────────────────────────── */}
+                <View className="px-5 mt-4">
+                    {/* Title + tagline */}
+                    <Text className="text-white font-bold text-2xl leading-tight">
+                        {movie?.title}
+                    </Text>
+                    {movie?.tagline ? (
+                        <Text className="text-light-200 text-sm italic mt-1">
                             "{movie.tagline}"
                         </Text>
-                    )}
+                    ) : null}
 
-                    <View className="flex-row items-center gap-x-1 mt-3">
-                        <Text className="text-light-200 text-sm">
-                            {movie?.release_date?.split("-")[0]} •
+                    {/* Meta row */}
+                    <View className="flex-row items-center flex-wrap gap-x-2 mt-2">
+                        <Text className="text-light-300 text-xs">
+                            {movie?.release_date?.split("-")[0]}
                         </Text>
-                        <Text className="text-light-200 text-sm">{movie?.runtime}m •</Text>
-                        <Text className="text-light-200 text-sm">{movie?.status}</Text>
+                        <Text className="text-light-300 text-xs">•</Text>
+                        <Text className="text-light-300 text-xs">
+                            {movie?.runtime ? `${movie.runtime}m` : "—"}
+                        </Text>
+                        <Text className="text-light-300 text-xs">•</Text>
+                        <Text className="text-light-300 text-xs">{movie?.status}</Text>
                     </View>
 
-                    {/* Rating and vote count section */}
-                    <View className="flex-row items-center bg-dark-100 px-3 py-2 rounded-lg gap-x-2 mt-3">
-                        <Image source={icons.star} className="size-5" />
-                        <Text className="text-white font-bold text-base">
+                    {/* Rating pill */}
+                    <View className="flex-row items-center bg-dark-100 self-start px-3 py-1.5 rounded-lg gap-x-2 mt-3">
+                        <Image source={icons.star} className="size-4" tintColor="#AB8BFF" />
+                        <Text className="text-white font-bold text-sm">
                             {movie?.vote_average?.toFixed(1)}/10
                         </Text>
-                        <Text className="text-light-200 text-sm">
+                        <Text className="text-light-300 text-xs">
                             ({movie?.vote_count?.toLocaleString()} votes)
                         </Text>
                     </View>
 
-                    {/* Action Buttons */}
-                    <View className="flex-row gap-3 mt-4 w-full">
-                        {/* Play Trailer Button */}
-                        {videos && videos.length > 0 && (
-                            <TouchableOpacity
-                                onPress={handlePlayTrailer}
-                                className="flex-1 bg-accent rounded-lg py-3 flex-row items-center justify-center"
-                            >
-                                <Image
-                                    source={icons.play}
-                                    className="size-5 mr-2"
-                                    tintColor="#fff"
-                                />
-                                <Text className="text-white font-semibold">Watch Trailer</Text>
-                            </TouchableOpacity>
-                        )}
-
-                        {/* Download Button */}
+                    {/* ── Action buttons ─────────────────────── */}
+                    <View className="mt-5 gap-y-3">
+                        {/* Watch Now — full width, primary CTA */}
                         <TouchableOpacity
-                            onPress={handleDownload}
-                            disabled={downloadLoading || isDownloaded}
-                            className={`flex-1 ${
-                                isDownloaded ? "bg-dark-100" : "bg-dark-100"
-                            } rounded-lg py-3 flex-row items-center justify-center ${
-                                downloadLoading ? "opacity-50" : ""
-                            }`}
+                            onPress={handleWatchNow}
+                            className="bg-accent rounded-xl py-4 flex-row items-center justify-center gap-x-2"
+                            activeOpacity={0.85}
                         >
-                            {downloadLoading ? (
-                                <ActivityIndicator color="#AB8BFF" />
-                            ) : (
-                                <>
-                                    <Image
-                                        source={icons.arrow}
-                                        className={`size-5 mr-2 ${
-                                            isDownloaded ? "" : "rotate-90"
-                                        }`}
-                                        tintColor={isDownloaded ? "#AB8BFF" : "#fff"}
-                                    />
-                                    <Text
-                                        className={`font-semibold ${
-                                            isDownloaded ? "text-accent" : "text-white"
-                                        }`}
-                                    >
-                                        {isDownloaded ? "Downloaded" : "Download"}
-                                    </Text>
-                                </>
-                            )}
+                            <Image source={icons.play} className="size-5" tintColor="#fff" />
+                            <Text className="text-white font-bold text-base">Watch Now</Text>
                         </TouchableOpacity>
+
+                        {/* Trailer + Download row */}
+                        <View className="flex-row gap-x-3">
+                            {videos && videos.length > 0 && (
+                                <TouchableOpacity
+                                    onPress={handlePlayTrailer}
+                                    className="flex-1 bg-dark-100 rounded-xl py-3 flex-row items-center justify-center gap-x-2"
+                                >
+                                    <Image source={icons.play} className="size-4" tintColor="#AB8BFF" />
+                                    <Text className="text-accent font-semibold text-sm">Trailer</Text>
+                                </TouchableOpacity>
+                            )}
+                            <TouchableOpacity
+                                onPress={handleDownload}
+                                disabled={downloadLoading || isDownloaded}
+                                className="flex-1 bg-dark-100 rounded-xl py-3 flex-row items-center justify-center gap-x-2"
+                                style={{ opacity: downloadLoading ? 0.5 : 1 }}
+                            >
+                                {downloadLoading ? (
+                                    <ActivityIndicator size="small" color="#AB8BFF" />
+                                ) : (
+                                    <>
+                                        <Image
+                                            source={icons.save}
+                                            className="size-4"
+                                            tintColor={isDownloaded ? "#AB8BFF" : "#fff"}
+                                        />
+                                        <Text
+                                            className="font-semibold text-sm"
+                                            style={{ color: isDownloaded ? "#AB8BFF" : "#fff" }}
+                                        >
+                                            {isDownloaded ? "Saved" : "Download"}
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
-                    {/* Genres */}
-                    <View className="flex-row flex-wrap gap-2 mt-4">
-                        {movie?.genres?.map((genre) => (
-                            <View
-                                key={genre.id}
-                                className="bg-dark-100 px-3 py-1 rounded-full"
-                            >
-                                <Text className="text-light-100 text-xs">{genre.name}</Text>
+                    {/* Genre pills */}
+                    <View className="flex-row flex-wrap gap-2 mt-5">
+                        {movie?.genres?.map((g) => (
+                            <View key={g.id} className="bg-dark-100 px-3 py-1 rounded-full">
+                                <Text className="text-light-100 text-xs">{g.name}</Text>
                             </View>
                         ))}
                     </View>
@@ -341,39 +327,29 @@ const Details = () => {
                     {/* Overview */}
                     <MovieInfo label="Overview" value={movie?.overview} />
 
-                    {/* Cast Section */}
+                    {/* Cast */}
                     {credits?.cast && credits.cast.length > 0 && (
                         <View className="mt-6">
-                            <Text className="text-white text-lg font-bold mb-3">
-                                Top Cast
-                            </Text>
+                            <Text className="text-white text-lg font-bold mb-3">Top Cast</Text>
                             <FlatList
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
-                                data={credits.cast.slice(0, 10)}
+                                data={credits.cast.slice(0, 12)}
                                 renderItem={({ item }) => <CastCard cast={item} />}
-                                keyExtractor={(item) => item.cast_id.toString()}
+                                keyExtractor={(item) => item.cast_id?.toString() ?? item.id?.toString()}
                             />
                         </View>
                     )}
 
-                    {/* Production Info */}
-                    <View className="flex flex-row justify-between w-full mt-6">
+                    {/* Production stats */}
+                    <View className="flex-row justify-between w-full mt-6">
                         <MovieInfo
                             label="Budget"
-                            value={
-                                movie?.budget
-                                    ? `$${(movie.budget / 1_000_000).toFixed(1)}M`
-                                    : "N/A"
-                            }
+                            value={movie?.budget ? `$${(movie.budget / 1_000_000).toFixed(1)}M` : null}
                         />
                         <MovieInfo
                             label="Revenue"
-                            value={
-                                movie?.revenue
-                                    ? `$${(movie.revenue / 1_000_000).toFixed(1)}M`
-                                    : "N/A"
-                            }
+                            value={movie?.revenue ? `$${(movie.revenue / 1_000_000).toFixed(1)}M` : null}
                         />
                         <MovieInfo
                             label="Language"
@@ -383,25 +359,22 @@ const Details = () => {
 
                     <MovieInfo
                         label="Production Companies"
-                        value={
-                            movie?.production_companies?.map((c) => c.name).join(" • ") ||
-                            "N/A"
-                        }
+                        value={movie?.production_companies?.map((c) => c.name).join(" • ") || null}
                     />
 
-                    {/* Similar Movies Section */}
+                    {/* Similar movies */}
                     {similarMovies && similarMovies.length > 0 && (
                         <View className="mt-8">
                             <Text className="text-white text-lg font-bold mb-3">
-                                Similar Movies
+                                More Like This
                             </Text>
                             <FlatList
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
-                                data={similarMovies.slice(0, 10)}
+                                data={similarMovies.slice(0, 12)}
                                 renderItem={({ item }) => (
-                                    <View className="mr-4 w-32">
-                                        <MovieCard {...item} />
+                                    <View className="mr-3 w-28">
+                                        <MovieCard {...item} compact />
                                     </View>
                                 )}
                                 keyExtractor={(item) => item.id.toString()}
@@ -411,18 +384,18 @@ const Details = () => {
                 </View>
             </ScrollView>
 
-            {/* "Go Back" button positioned at the bottom of the screen */}
-            <View className="absolute bottom-0 left-0 right-0 bg-primary/95 px-5 py-4">
+            {/* ── Sticky bottom bar ──────────────────────── */}
+            <View
+                className="absolute bottom-0 left-0 right-0 px-5 py-4"
+                style={{ backgroundColor: "rgba(3,0,20,0.96)" }}
+            >
                 <TouchableOpacity
-                    className="bg-accent rounded-lg py-3.5 flex flex-row items-center justify-center"
-                    onPress={router.back}
+                    className="bg-accent rounded-xl py-3.5 flex-row items-center justify-center gap-x-2"
+                    onPress={handleWatchNow}
+                    activeOpacity={0.85}
                 >
-                    <Image
-                        source={icons.arrow}
-                        className="size-5 mr-1 mt-0.5 rotate-180"
-                        tintColor="#fff"
-                    />
-                    <Text className="text-white font-semibold text-base">Go Back</Text>
+                    <Image source={icons.play} className="size-5" tintColor="#fff" />
+                    <Text className="text-white font-bold text-base">Watch Now</Text>
                 </TouchableOpacity>
             </View>
         </View>
