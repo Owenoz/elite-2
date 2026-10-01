@@ -1,3 +1,5 @@
+// URL polyfill MUST be first — required by react-native-appwrite on Android
+import 'react-native-url-polyfill/auto';
 import { Stack } from "expo-router";
 import './globals.css';
 import { StatusBar } from "expo-status-bar";
