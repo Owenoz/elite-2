@@ -2,7 +2,7 @@
   "expo": {
     "name": "GEN Z CORNER",
     "slug": "gen-z-corner",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "genzcorner",
@@ -22,7 +22,8 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#030014"
       },
-      "package": "com.genzcorner.app"
+      "package": "com.genzcorner.app",
+      "usesCleartextTraffic": true
     },
     "web": {
       "bundler": "metro",
